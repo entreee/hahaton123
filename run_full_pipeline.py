@@ -68,6 +68,9 @@ def main() -> None:
     # Настройка логирования
     logger = setup_logging()
     
+    # Счетчики для отслеживания пропущенных этапов
+    skipped_steps = []
+    
     # Добавляем корень проекта в PYTHONPATH
     project_root = Path(__file__).resolve().parent
     if str(project_root) not in sys.path:
@@ -146,11 +149,19 @@ def main() -> None:
             logger.error(f"Ошибка при настройке конфигурации: {e}", exc_info=True)
             raise
         
-        # 2. Извлечение кадров из видео (если есть видео)
+        # 2. Извлечение кадров из видео (если есть видео и еще не извлечены)
         logger.info("=" * 70)
         logger.info("ШАГ 2: Извлечение кадров из видео")
         logger.info("=" * 70)
         try:
+            train_images_dir = config.data_dir / "images" / "train"
+            train_images_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Проверяем, есть ли уже извлеченные кадры
+            existing_images = list(train_images_dir.glob("*.jpg")) + list(train_images_dir.glob("*.png")) + list(
+                train_images_dir.glob("*.jpeg")
+            )
+            
             logger.info(f"Поиск видео в директории: {config.videos_dir}")
             video_exts = config.video_extensions
             logger.info(f"Поддерживаемые расширения: {video_exts}")
@@ -166,12 +177,18 @@ def main() -> None:
                 for i, video in enumerate(videos, 1):
                     logger.info(f"  [{i}] {video.name}")
             
-            if videos:
+            # Проверяем, нужно ли извлекать кадры
+            if existing_images:
+                logger.info(f"Найдено уже извлеченных кадров: {len(existing_images)}")
+                logger.info("Извлечение кадров пропущено: кадры уже были извлечены ранее.")
+                logger.info("Если нужно извлечь кадры заново, удалите изображения из 'data/images/train/' и запустите скрипт снова.")
+                skipped_steps.append("Извлечение кадров")
+            elif videos:
                 logger.info("Запуск извлечения кадров...")
                 logger.info(f"Шаг извлечения: каждый {config.frame_extraction_step}-й кадр (уменьшен для большего датасета)")
                 total_frames = auto_extract_frames(
                     videos_dir=str(config.videos_dir),
-                    output_dir=str(config.data_dir / "images" / "train"),
+                    output_dir=str(train_images_dir),
                     step=config.frame_extraction_step,  # Уменьшен для увеличения датасета
                 )
                 logger.info(f"Кадры извлечены: {total_frames}")
@@ -200,6 +217,13 @@ def main() -> None:
             logger.info(f"Найдено изображений: {len(train_images)}")
             logger.info(f"Найдено файлов разметки: {len(train_labels)}")
             
+            # Проверяем, сколько изображений уже имеют разметку
+            images_with_labels = 0
+            for img in train_images:
+                label_file = train_labels_dir / f"{img.stem}.txt"
+                if label_file.exists():
+                    images_with_labels += 1
+            
             if train_images and not train_labels:
                 logger.info(f"Запуск авторазметки для {len(train_images)} изображений...")
                 stats = auto_prelabel(
@@ -213,7 +237,13 @@ def main() -> None:
                 if not train_images:
                     logger.warning("Авторазметка пропущена: нет изображений в data/images/train/")
                 else:
-                    logger.info("Авторазметка пропущена: разметка уже существует в data/labels/train/")
+                    logger.info(f"Авторазметка пропущена: найдено {len(train_labels)} файлов разметки для {len(train_images)} изображений")
+                    if images_with_labels < len(train_images):
+                        missing = len(train_images) - images_with_labels
+                        logger.info(f"  Примечание: {missing} изображений без разметки. Для доразметки запустите авторазметку вручную.")
+                    else:
+                        logger.info("  Все изображения имеют разметку.")
+                    skipped_steps.append("Авторазметка")
         except Exception as e:
             logger.error(f"Ошибка при авторазметке: {e}", exc_info=True)
             logger.warning("Продолжаем выполнение пайплайна...")
@@ -233,7 +263,13 @@ def main() -> None:
                 train_images_dir.glob("*.jpeg")
             )
             
+            val_labels = list(val_labels_dir.glob("*.txt"))
+            
+            logger.info(f"Train: {len(train_images)} изображений, {len(list(train_labels_dir.glob('*.txt')))} разметок")
+            logger.info(f"Val: {len(val_images)} изображений, {len(val_labels)} разметок")
+            
             if train_images and not val_images:
+                logger.info(f"Запуск разделения train/val (ratio={config.val_ratio})...")
                 moved_images, moved_labels = split_dataset(
                     train_images_dir=str(train_images_dir),
                     train_labels_dir=str(train_labels_dir),
@@ -247,7 +283,9 @@ def main() -> None:
                 if not train_images:
                     logger.warning("Разделение train/val пропущено: нет изображений в data/images/train/")
                 else:
-                    logger.info("Разделение train/val пропущено: валидационная выборка уже существует")
+                    logger.info(f"Разделение train/val пропущено: валидационная выборка уже существует ({len(val_images)} изображений)")
+                    logger.info("  Если нужно переразделить датасет, удалите содержимое 'data/images/val/' и 'data/labels/val/' и запустите скрипт снова.")
+                    skipped_steps.append("Разделение train/val")
         except Exception as e:
             logger.error(f"Ошибка при разделении датасета: {e}", exc_info=True)
             logger.warning("Продолжаем выполнение пайплайна...")
@@ -364,7 +402,10 @@ def main() -> None:
         logger.info("ШАГ 7: Быстрый тест обученной модели")
         logger.info("=" * 70)
         try:
-            if not best_model_path.exists():
+            # Проверяем, что best_model_path был определен
+            if 'best_model_path' not in locals():
+                logger.warning("Путь к модели не определен, пропускаю тест инференса.")
+            elif not best_model_path.exists():
                 logger.warning("Файл лучшей модели не найден, пропускаю тест инференса.")
             else:
                 val_images = list(val_images_dir.glob("*.jpg")) + list(val_images_dir.glob("*.png")) + list(
@@ -394,12 +435,24 @@ def main() -> None:
         logger.info("=" * 70)
         logger.info("Что сделано:")
         logger.info("- Структура проекта и конфигурация подготовлены;")
-        logger.info("- Кадры из видео извлечены (если видео были);")
-        logger.info("- Предразметка выполнена (если не было разметки);")
-        logger.info("- Данные разделены на train/val;")
+        if "Извлечение кадров" not in skipped_steps:
+            logger.info("- Кадры из видео извлечены (если видео были);")
+        else:
+            logger.info("- Извлечение кадров пропущено (кадры уже были извлечены ранее);")
+        if "Авторазметка" not in skipped_steps:
+            logger.info("- Предразметка выполнена (если не было разметки);")
+        else:
+            logger.info("- Авторазметка пропущена (разметка уже существует);")
+        if "Разделение train/val" not in skipped_steps:
+            logger.info("- Данные разделены на train/val;")
+        else:
+            logger.info("- Разделение train/val пропущено (валидационная выборка уже существует);")
         logger.info("- Модель обучена;")
         logger.info("- Быстрый тест модели на одном изображении выполнен.")
         logger.info("")
+        if skipped_steps:
+            logger.info(f"Пропущенные этапы (уже выполнены ранее): {', '.join(skipped_steps)}")
+            logger.info("")
         logger.info("Дальше вы можете:")
         logger.info("- Открыть ноутбук 'notebooks/inference.ipynb' для интерактивных тестов;")
         logger.info("- Использовать 'src/inference/detect_utils.py' для детекции в своих скриптах.")

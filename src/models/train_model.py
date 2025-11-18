@@ -170,6 +170,27 @@ class PPEDetectorTrainer:
         self.logger.info(f"Параметры: epochs={epochs}, img_size={img_size}, batch={batch_size}, workers={workers}")
         self.logger.info(f"Платформа: {platform.system()}, CPU cores: {multiprocessing.cpu_count()}")
         
+        # Проверка доступной памяти GPU
+        if torch.cuda.is_available() and self.device != "cpu":
+            try:
+                gpu_id = int(self.device) if self.device.isdigit() else 0
+                memory_total = torch.cuda.get_device_properties(gpu_id).total_memory / (1024**3)  # GB
+                memory_allocated = torch.cuda.memory_allocated(gpu_id) / (1024**3)  # GB
+                memory_free = memory_total - memory_allocated
+                
+                self.logger.info(f"GPU память: {memory_free:.2f} GB свободно / {memory_total:.2f} GB всего")
+                
+                # Оценка требуемой памяти (приблизительно)
+                # YOLOv8l с img_size=1600 и batch_size=4 требует примерно 8-12 GB
+                estimated_memory = (img_size / 640) ** 2 * batch_size * 0.5  # Примерная оценка в GB
+                self.logger.info(f"Примерная требуемая память: ~{estimated_memory:.2f} GB")
+                
+                if memory_free < estimated_memory * 0.8:
+                    self.logger.warning(f"Внимание: свободной памяти ({memory_free:.2f} GB) может не хватить!")
+                    self.logger.warning(f"Рекомендуется уменьшить batch_size или img_size")
+            except Exception as e:
+                self.logger.warning(f"Не удалось проверить память GPU: {e}")
+        
         # Создаем директорию проекта
         experiment_dir = self.project_dir / self.experiment_name
         experiment_dir.mkdir(parents=True, exist_ok=True)
@@ -241,7 +262,12 @@ class PPEDetectorTrainer:
         
         self.logger.info(f"Директория эксперимента: {experiment_dir}")
         
-        # Запуск обучения с обработкой ошибок multiprocessing
+        # Очистка кэша CUDA перед обучением
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            self.logger.info("Кэш CUDA очищен перед обучением")
+        
+        # Запуск обучения с обработкой ошибок multiprocessing и CUDA OOM
         try:
             self.logger.info("Запуск обучения...")
             results = model.train(**train_params)
@@ -279,6 +305,120 @@ class PPEDetectorTrainer:
         except KeyboardInterrupt:
             self.logger.warning("Обучение прервано пользователем")
             return {'success': False, 'error': 'Interrupted by user'}
+        except RuntimeError as e:
+            # Обработка CUDA out of memory
+            error_str = str(e).lower()
+            if 'out of memory' in error_str or 'cuda' in error_str:
+                self.logger.warning(f"CUDA out of memory: {e}")
+                
+                # Очистка памяти
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                    self.logger.info("Кэш CUDA очищен")
+                
+                # Пробуем уменьшить параметры
+                original_batch_size = batch_size
+                original_img_size = img_size
+                
+                # Стратегия уменьшения: сначала batch_size, потом img_size
+                new_batch_size = max(1, batch_size // 2)
+                new_img_size = img_size
+                
+                if new_batch_size == 1 and img_size > 640:
+                    # Если batch_size уже 1, уменьшаем размер изображения
+                    new_img_size = max(640, int(img_size * 0.75))
+                    self.logger.info(f"Уменьшаем размер изображения: {img_size} -> {new_img_size}")
+                
+                if new_batch_size < original_batch_size:
+                    self.logger.info(f"Уменьшаем batch_size: {original_batch_size} -> {new_batch_size}")
+                
+                if new_batch_size != original_batch_size or new_img_size != original_img_size:
+                    train_params['batch'] = new_batch_size
+                    train_params['imgsz'] = new_img_size
+                    
+                    self.logger.info(f"Повторная попытка с уменьшенными параметрами:")
+                    self.logger.info(f"  batch_size: {new_batch_size}, img_size: {new_img_size}")
+                    
+                    try:
+                        results = model.train(**train_params)
+                        self.logger.info("Обучение успешно завершено с уменьшенными параметрами!")
+                        
+                        # Статистика результатов
+                        best_model = experiment_dir / "weights" / "best.pt"
+                        last_model = experiment_dir / "weights" / "last.pt"
+                        
+                        self.logger.info(f"Лучшая модель: {best_model}")
+                        self.logger.info(f"Последняя модель: {last_model}")
+                        
+                        # Метрики
+                        final_metrics = None
+                        results_csv = experiment_dir / "results.csv"
+                        if results_csv.exists():
+                            import pandas as pd
+                            df = pd.read_csv(results_csv)
+                            final_metrics = df.iloc[-1]
+                            self.logger.info(
+                                f"Финальные метрики: mAP50={final_metrics.get('metrics/mAP50(B)', 'N/A'):.3f}, "
+                                f"mAP50-95={final_metrics.get('metrics/mAP50-95(B)', 'N/A'):.3f}"
+                            )
+                        
+                        return {
+                            'success': True,
+                            'experiment_dir': str(experiment_dir),
+                            'best_model': str(best_model),
+                            'last_model': str(last_model),
+                            'results': results,
+                            'metrics': final_metrics,
+                            'warning': f'Used reduced parameters: batch_size={new_batch_size}, img_size={new_img_size} due to OOM'
+                        }
+                    except RuntimeError as retry_error:
+                        retry_error_str = str(retry_error).lower()
+                        if 'out of memory' in retry_error_str:
+                            # Если все еще не хватает памяти, пробуем еще меньше
+                            if new_batch_size > 1:
+                                train_params['batch'] = 1
+                                train_params['imgsz'] = max(640, int(new_img_size * 0.8))
+                                self.logger.info(f"Последняя попытка: batch_size=1, img_size={train_params['imgsz']}")
+                                
+                                try:
+                                    if torch.cuda.is_available():
+                                        torch.cuda.empty_cache()
+                                    results = model.train(**train_params)
+                                    self.logger.info("Обучение успешно завершено с минимальными параметрами!")
+                                    
+                                    best_model = experiment_dir / "weights" / "best.pt"
+                                    last_model = experiment_dir / "weights" / "last.pt"
+                                    
+                                    final_metrics = None
+                                    results_csv = experiment_dir / "results.csv"
+                                    if results_csv.exists():
+                                        import pandas as pd
+                                        df = pd.read_csv(results_csv)
+                                        final_metrics = df.iloc[-1]
+                                    
+                                    return {
+                                        'success': True,
+                                        'experiment_dir': str(experiment_dir),
+                                        'best_model': str(best_model),
+                                        'last_model': str(last_model),
+                                        'results': results,
+                                        'metrics': final_metrics,
+                                        'warning': f'Used minimal parameters: batch_size=1, img_size={train_params["imgsz"]} due to OOM'
+                                    }
+                                except Exception as final_error:
+                                    self.logger.error(f"Не удалось обучить даже с минимальными параметрами: {final_error}")
+                                    return {'success': False, 'error': f'CUDA OOM: не хватает памяти даже с batch_size=1, img_size={train_params["imgsz"]}. Попробуйте использовать меньшую модель или CPU.'}
+                            else:
+                                self.logger.error(f"Не удалось обучить даже с batch_size=1: {retry_error}")
+                                return {'success': False, 'error': f'CUDA OOM: не хватает памяти даже с batch_size=1. Попробуйте использовать меньшую модель (yolov8n.pt) или CPU.'}
+                        else:
+                            raise
+                else:
+                    self.logger.error("Не удалось уменьшить параметры достаточно")
+                    return {'success': False, 'error': f'CUDA OOM: {e}. Попробуйте использовать меньшую модель (yolov8n.pt) или уменьшить img_size.'}
+            else:
+                # Другие RuntimeError - пробрасываем дальше к обработке multiprocessing
+                raise
         except (ConnectionResetError, RuntimeError) as e:
             # Обработка ошибок multiprocessing (ConnectionResetError, RuntimeError)
             error_str = str(e).lower()

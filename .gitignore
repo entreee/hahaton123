@@ -9,11 +9,48 @@ env/
 ENV/
 .venv
 
-# Models and outputs
+# Jupyter Notebook
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Models and outputs (обученные модели - могут быть большими)
+models/
 models/*/
+*.pt
+*.pth
+*.onnx
+*.engine
 !models/.gitkeep
+
+# Output (результаты инференса)
+output/
 output/*
 !output/.gitkeep
+
+# Data (данные - могут быть большими)
+data/
+data/images/
+data/labels/
+data/images/train/
+data/images/val/
+data/labels/train/
+data/labels/val/
+!data/.gitkeep
+
+# Videos (видео файлы - могут быть большими)
+videos/
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.flv
+*.wmv
+*.m4v
+
+# Logs (логи)
+logs/
+*.log
+*.log.*
 
 # IDE
 .vscode/
@@ -21,12 +58,59 @@ output/*
 *.swp
 *.swo
 *~
+*.sublime-project
+*.sublime-workspace
 
 # OS
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Desktop.ini
 Thumbs.db
 
-# Data (optional - раскомментируйте если не хотите пушить данные)
-# data/images/
-# data/labels/
+# Временные файлы
+*.tmp
+*.temp
+*.bak
+*.cache
 
+# Distribution / packaging
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Environments
+.env
+.env.local
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json

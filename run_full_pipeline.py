@@ -454,31 +454,83 @@ def main() -> None:
         
         # Финальное сообщение
         logger.info("=" * 70)
-        logger.info("ПАЙПЛАЙН ЗАВЕРШЕН!")
+        logger.info("🎉 ПАЙПЛАЙН ЗАВЕРШЕН УСПЕШНО!")
         logger.info("=" * 70)
-        logger.info("Что сделано:")
-        logger.info("- Структура проекта и конфигурация подготовлены;")
-        if "Извлечение кадров" not in skipped_steps:
-            logger.info("- Кадры из видео извлечены (если видео были);")
-        else:
-            logger.info("- Извлечение кадров пропущено (кадры уже были извлечены ранее);")
-        if "Авторазметка" not in skipped_steps:
-            logger.info("- Предразметка выполнена (если не было разметки);")
-        else:
-            logger.info("- Авторазметка пропущена (разметка уже существует);")
-        if "Разделение train/val" not in skipped_steps:
-            logger.info("- Данные разделены на train/val;")
-        else:
-            logger.info("- Разделение train/val пропущено (валидационная выборка уже существует);")
-        logger.info("- Модель обучена;")
-        logger.info("- Быстрый тест модели на одном изображении выполнен.")
         logger.info("")
-        if skipped_steps:
-            logger.info(f"Пропущенные этапы (уже выполнены ранее): {', '.join(skipped_steps)}")
+        logger.info("📋 ЧТО БЫЛО СДЕЛАНО:")
+        logger.info("  ✓ Структура проекта и конфигурация подготовлены")
+        if "Извлечение кадров" not in skipped_steps:
+            logger.info("  ✓ Кадры из видео извлечены (если видео были)")
+        else:
+            logger.info("  ⊘ Извлечение кадров пропущено (кадры уже были извлечены ранее)")
+        if "Авторазметка" not in skipped_steps:
+            logger.info("  ✓ Предразметка выполнена (если не было разметки)")
+        else:
+            logger.info("  ⊘ Авторазметка пропущена (разметка уже существует)")
+        if "Разделение train/val" not in skipped_steps:
+            logger.info("  ✓ Данные разделены на train/val")
+        else:
+            logger.info("  ⊘ Разделение train/val пропущено (валидационная выборка уже существует)")
+        logger.info("  ✓ Модель обучена")
+        logger.info("  ✓ Быстрый тест модели на одном изображении выполнен")
+        logger.info("")
+        
+        # Показываем результаты
+        if 'best_model_path' in locals() and best_model_path.exists():
+            logger.info("=" * 70)
+            logger.info("📦 СОЗДАННЫЕ РЕЗУЛЬТАТЫ:")
+            logger.info("=" * 70)
             logger.info("")
-        logger.info("Дальше вы можете:")
-        logger.info("- Открыть ноутбук 'notebooks/inference.ipynb' для интерактивных тестов;")
-        logger.info("- Использовать 'src/inference/detect_utils.py' для детекции в своих скриптах.")
+            logger.info("⭐ ГЛАВНЫЙ РЕЗУЛЬТАТ - ОБУЧЕННАЯ МОДЕЛЬ:")
+            logger.info(f"   📍 Лучшая модель: {best_model_path}")
+            logger.info(f"   📍 Последняя модель: {best_model_path.parent / 'last.pt'}")
+            logger.info("")
+            logger.info("📊 МЕТРИКИ И ГРАФИКИ:")
+            experiment_dir = best_model_path.parent.parent
+            logger.info(f"   📍 Метрики (CSV): {experiment_dir / 'results.csv'}")
+            logger.info(f"   📍 Графики: {experiment_dir / 'results.png'}")
+            logger.info(f"   📍 Матрица ошибок: {experiment_dir / 'confusion_matrix.png'}")
+            logger.info("")
+            logger.info("🧪 ТЕСТОВАЯ ДЕТЕКЦИЯ:")
+            logger.info(f"   📍 Результаты: output/detections/")
+            logger.info("")
+            logger.info("📝 ЛОГИ:")
+            logger.info(f"   📍 Лог pipeline: logs/pipeline_*.log")
+            logger.info(f"   📍 Лог обучения: {experiment_dir / 'logs'}")
+            logger.info("")
+        
+        if skipped_steps:
+            logger.info(f"ℹ️  Пропущенные этапы (уже выполнены ранее): {', '.join(skipped_steps)}")
+            logger.info("")
+        
+        logger.info("=" * 70)
+        logger.info("🚀 ЧТО ДЕЛАТЬ ДАЛЬШЕ:")
+        logger.info("=" * 70)
+        logger.info("")
+        logger.info("1️⃣  ИСПОЛЬЗОВАТЬ МОДЕЛЬ ДЛЯ ДЕТЕКЦИИ:")
+        logger.info("   • Откройте ноутбук: notebooks/inference.ipynb")
+        logger.info("   • Или используйте Python:")
+        logger.info("     from src.inference.detect_utils import PPEDetector")
+        logger.info("     detector = PPEDetector('models/ppe_detection/weights/best.pt')")
+        logger.info("     detector.detect_image('image.jpg', save_result=True)")
+        logger.info("")
+        logger.info("2️⃣  ПРОВЕРИТЬ КАЧЕСТВО МОДЕЛИ:")
+        logger.info("   • Откройте: models/ppe_detection/results.png (графики метрик)")
+        logger.info("   • Проверьте: models/ppe_detection/results.csv (детальные метрики)")
+        logger.info("   • Хорошие значения: mAP50 > 0.5 (50%)")
+        logger.info("")
+        logger.info("3️⃣  ВИЗУАЛИЗИРОВАТЬ РАЗМЕТКУ:")
+        logger.info("   • python visualize_labels.py")
+        logger.info("   • python visualize_labels.py --split val")
+        logger.info("")
+        logger.info("4️⃣  УЛУЧШИТЬ МОДЕЛЬ (если метрики низкие):")
+        logger.info("   • Добавьте больше данных")
+        logger.info("   • Проверьте качество разметки")
+        logger.info("   • Увеличьте количество эпох в config.py")
+        logger.info("")
+        logger.info("=" * 70)
+        logger.info("📖 Подробная информация: см. PIPELINE_RESULTS.md")
+        logger.info("=" * 70)
         
     except Exception as e:
         logger.critical(f"Критическая ошибка в пайплайне: {e}", exc_info=True)

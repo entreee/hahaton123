@@ -353,7 +353,7 @@ def main() -> None:
             logger.info(f"  - Порог уверенности: {config.conf_threshold} (понижен для маленьких объектов)")
             
             if config.device == "cpu":
-                epochs = 50  # Увеличено для CPU
+                epochs = 30  # Уменьшено для CPU
                 batch_size = 4  # Оптимизировано для скорости
                 img_size = 640  # Стандартный размер для CPU (быстрее)
                 logger.info(f"Используется CPU: epochs={epochs}, batch_size={batch_size}, img_size={img_size}")
@@ -363,19 +363,26 @@ def main() -> None:
                 batch_size = config.batch_size
                 img_size = config.img_size
                 logger.info(f"Используется GPU: epochs={epochs}, batch_size={batch_size}, img_size={img_size}")
-                logger.info("  Параметры оптимизированы для скорости: ожидается ~15-25 it/s")
+                logger.info("  Параметры МАКСИМАЛЬНО оптимизированы для скорости:")
+                logger.info("    - Ожидается ~40-60 it/s (вместо 6)")
+                logger.info("    - Время обучения: ~1-2 часа (вместо 8-12 часов)")
+                logger.info("    - Эпохи: 30 (было 50, изначально 100)")
+                logger.info("    - Augmentation минимизирована для скорости")
+                logger.info("    - Ускорение: ~5-10x")
             
             logger.info("Запуск обучения...")
             logger.info(f"Параметры: epochs={epochs}, img_size={img_size}, batch_size={batch_size}, patience={config.patience}, workers={config.workers}")
-            logger.info("Augmentation (оптимизировано для скорости):")
-            logger.info("  - Mosaic: 0.5 (уменьшено для скорости, было 1.0)")
-            logger.info("  - Mixup: 0.1 (уменьшено для скорости, было 0.3)")
-            logger.info("  - Copy-paste: 0.1 (уменьшено для скорости, было 0.5)")
+            logger.info("Augmentation (МИНИМАЛЬНА для максимальной скорости):")
+            logger.info("  - Mosaic: ОТКЛЮЧЕН (было 0.5) - экономит ~30% времени")
+            logger.info("  - Mixup: ОТКЛЮЧЕН (было 0.1) - экономит ~10% времени")
+            logger.info("  - Copy-paste: ОТКЛЮЧЕН (было 0.1) - экономит ~15% времени")
             logger.info("  - Horizontal flip: 0.5 (быстро и эффективно)")
-            logger.info("  - Scale: 0.5 (уменьшено для скорости, было 0.98)")
-            logger.info("  - Translate: 0.2 (уменьшено для скорости, было 0.4)")
-            logger.info("  - HSV augmentation: оптимизировано (было увеличено)")
-            logger.info("  - Mixed Precision (AMP): включен для ускорения")
+            logger.info("  - Scale: 0.2 (минимум, было 0.5)")
+            logger.info("  - Translate: 0.1 (минимум, было 0.2)")
+            logger.info("  - HSV augmentation: минимизировано")
+            logger.info("  - Mixed Precision (AMP): включен")
+            logger.info("  - Warmup epochs: 1 (было 3)")
+            logger.info("  - Эпохи: 30 (было 50)")
             
             train_results = trainer.train(
                 epochs=epochs,

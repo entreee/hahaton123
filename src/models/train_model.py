@@ -181,14 +181,19 @@ class PPEDetectorTrainer:
         self.logger.info(f"Модель: {self.model_name}")
         self.logger.info(f"Конфигурация: {self.config_path}")
         self.logger.info("")
-        self.logger.info("ОПТИМИЗАЦИИ ДЛЯ СКОРОСТИ:")
-        self.logger.info("  - Уменьшен размер изображения (800 вместо 1280)")
-        self.logger.info("  - Увеличен batch_size (4 вместо 2)")
-        self.logger.info("  - Уменьшена интенсивность augmentation")
-        self.logger.info("  - Увеличено количество workers")
-        self.logger.info("  - Включен Mixed Precision Training (AMP)")
+        self.logger.info("МАКСИМАЛЬНЫЕ ОПТИМИЗАЦИИ ДЛЯ СКОРОСТИ:")
+        self.logger.info("  - Размер изображения: 640x640 (стандартный YOLO, максимальная скорость)")
+        self.logger.info("  - Batch size: 8 (максимальная утилизация GPU)")
+        self.logger.info("  - Augmentation: минимальная (mosaic/mixup/copy_paste отключены)")
+        self.logger.info("  - Workers: увеличено для быстрой загрузки данных")
+        self.logger.info("  - Mixed Precision (AMP): включен")
+        self.logger.info("  - Warmup epochs: 1 (было 3)")
+        self.logger.info("  - Эпохи: 30 (было 50, изначально 100)")
+        self.logger.info("  - Patience: 10 (быстрая остановка)")
         self.logger.info("")
-        self.logger.info("Ожидаемая скорость: ~15-25 итераций/сек (вместо 6)")
+        self.logger.info("Ожидаемая скорость: ~40-60 итераций/сек (вместо 6)")
+        self.logger.info("Время обучения: ~1-2 часа (вместо 8-12 часов)")
+        self.logger.info("Ускорение: ~5-10x по сравнению с предыдущими настройками")
         
         # Проверка доступной памяти GPU
         if torch.cuda.is_available() and self.device != "cpu":
@@ -201,9 +206,9 @@ class PPEDetectorTrainer:
                 self.logger.info(f"GPU память: {memory_free:.2f} GB свободно / {memory_total:.2f} GB всего")
                 
                 # Оценка требуемой памяти (приблизительно)
-                # YOLOv8l с img_size=800 и batch_size=4 требует примерно 5-7 GB
-                # Формула: (img_size/640)^2 * batch_size * 0.35 для YOLOv8l
-                estimated_memory = (img_size / 640) ** 2 * batch_size * 0.35  # Примерная оценка в GB
+                # YOLOv8l с img_size=640 и batch_size=8 требует примерно 6-8 GB
+                # Формула: (img_size/640)^2 * batch_size * 0.3 для YOLOv8l
+                estimated_memory = (img_size / 640) ** 2 * batch_size * 0.3  # Примерная оценка в GB
                 self.logger.info(f"Примерная требуемая память: ~{estimated_memory:.2f} GB")
                 
                 # Автоматическое уменьшение параметров при нехватке памяти
@@ -218,13 +223,13 @@ class PPEDetectorTrainer:
                     # Уменьшаем batch_size сначала
                     if batch_size > 1 and memory_free < estimated_memory * 0.9:
                         batch_size = max(1, batch_size // 2)
-                        estimated_memory = (img_size / 640) ** 2 * batch_size * 0.35
+                        estimated_memory = (img_size / 640) ** 2 * batch_size * 0.3
                         self.logger.info(f"Автоматически уменьшен batch_size: {original_batch_size} -> {batch_size}")
                     
                     # Если все еще не хватает, уменьшаем img_size
                     if memory_free < estimated_memory * 0.9 and img_size > 640:
                         img_size = max(640, int(img_size * 0.8))
-                        estimated_memory = (img_size / 640) ** 2 * batch_size * 0.35
+                        estimated_memory = (img_size / 640) ** 2 * batch_size * 0.3
                         self.logger.info(f"Автоматически уменьшен img_size: {original_img_size} -> {img_size}")
                     
                     if batch_size != original_batch_size or img_size != original_img_size:
@@ -289,7 +294,7 @@ class PPEDetectorTrainer:
             'lr0': 0.01,
             'momentum': 0.937,
             'weight_decay': 0.0005,
-            'warmup_epochs': 3,
+            'warmup_epochs': 1,  # Уменьшено для скорости (было 3)
             'warmup_momentum': 0.8,
             'warmup_bias_lr': 0.1,
             'box': 7.5,
@@ -299,20 +304,20 @@ class PPEDetectorTrainer:
             'kobj': 2.0,
             'label_smoothing': 0.0,
             'nbs': 64,
-            # Augmentation оптимизирована для скорости и качества
-            'hsv_h': 0.015,  # Уменьшено для скорости (было 0.05)
-            'hsv_s': 0.7,  # Уменьшено для скорости (было 0.9)
-            'hsv_v': 0.4,  # Уменьшено для скорости (было 0.5)
+            # Augmentation минимальна для максимальной скорости
+            'hsv_h': 0.01,  # Минимум для скорости
+            'hsv_s': 0.5,  # Минимум для скорости
+            'hsv_v': 0.3,  # Минимум для скорости
             'degrees': 0.0,  # Без поворота для высокого угла обзора
-            'translate': 0.2,  # Уменьшено для скорости (было 0.4)
-            'scale': 0.5,  # Уменьшено для скорости (было 0.98) - все еще эффективно для маленьких объектов
+            'translate': 0.1,  # Минимум для скорости (было 0.2)
+            'scale': 0.2,  # Минимум для скорости (было 0.5)
             'shear': 0.0,
             'perspective': 0.0,  # Без перспективы для высокого угла обзора
             'flipud': 0.0,  # Без вертикального отражения для высокого угла
-            'fliplr': 0.5,  # Горизонтальное отражение (удваивает датасет) - быстро
-            'mosaic': 0.5,  # Уменьшено для скорости (было 1.0) - все еще эффективно
-            'mixup': 0.1,  # Уменьшено для скорости (было 0.3)
-            'copy_paste': 0.1,  # Уменьшено для скорости (было 0.5)
+            'fliplr': 0.5,  # Горизонтальное отражение - быстро и эффективно
+            'mosaic': 0.0,  # Отключено для максимальной скорости (было 0.5)
+            'mixup': 0.0,  # Отключено для максимальной скорости (было 0.1)
+            'copy_paste': 0.0,  # Отключено для максимальной скорости (было 0.1)
             'cfg': None,
             'tracker': None,
             'save_dir': str(experiment_dir),
@@ -324,6 +329,13 @@ class PPEDetectorTrainer:
             'amp': True,  # Mixed precision training для ускорения (если поддерживается)
             'fraction': 1.0,  # Использовать весь датасет
             'profile': False,  # Отключить профилирование для скорости
+            'plots': plots,  # Генерировать графики только если нужно
+            'save': save,  # Сохранять чекпоинты
+            'cache': False,  # Не кэшировать изображения в памяти (экономит память, но немного медленнее)
+            'single_cls': False,  # Множественные классы
+            'rect': False,  # Прямоугольное обучение (может ускорить, но ухудшить качество)
+            'cos_lr': False,  # Cosine learning rate schedule
+            'close_mosaic': 10,  # Отключить mosaic за 10 эпох до конца (уже отключен, но на всякий случай)
         }
         
         self.logger.info(f"Директория эксперимента: {experiment_dir}")

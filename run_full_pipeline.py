@@ -76,14 +76,26 @@ def main() -> None:
     logger.info(f"Корень проекта: {project_root}")
     
     try:
+        logger.info("Начало импорта модулей...")
         # Импорты локальных модулей (после добавления пути)
+        logger.info("Импорт config...")
         from src.utils.config import config, ProjectConfig
+        logger.info("Импорт config завершен")
+        
+        logger.info("Импорт data модулей...")
         from src.data.extract_frames import auto_extract_frames
         from src.data.auto_prelabel import auto_prelabel
         from src.data.split_dataset import split_dataset
         from src.data.data_utils import check_data_structure, get_dataset_stats
+        logger.info("Импорт data модулей завершен")
+        
+        logger.info("Импорт models модулей...")
         from src.models.train_model import PPEDetectorTrainer
+        logger.info("Импорт models модулей завершен")
+        
+        logger.info("Импорт inference модулей...")
         from src.inference.detect_utils import PPEDetector
+        logger.info("Импорт inference модулей завершен")
         
         logger.info("Все модули успешно импортированы")
         
@@ -92,10 +104,22 @@ def main() -> None:
         logger.info("ШАГ 1: Настройка конфигурации и структуры проекта")
         logger.info("=" * 70)
         try:
+            logger.info("Получение сводки путей...")
             paths_summary = config.get_paths_summary()
+            logger.info(f"Пути получены: {len(paths_summary)} элементов")
+            
+            logger.info("Валидация путей...")
             config.validate_paths()
+            logger.info("Валидация путей завершена")
+            
+            logger.info("Создание конфигурации датасета...")
             config.create_dataset_config()
+            logger.info("Конфигурация датасета создана")
+            
+            logger.info("Создание файла классов...")
             config.create_classes_file()
+            logger.info("Файл классов создан")
+            
             logger.info("Конфигурация и структура проекта подготовлены")
         except Exception as e:
             logger.error(f"Ошибка при настройке конфигурации: {e}", exc_info=True)
@@ -106,14 +130,23 @@ def main() -> None:
         logger.info("ШАГ 2: Извлечение кадров из видео")
         logger.info("=" * 70)
         try:
+            logger.info(f"Поиск видео в директории: {config.videos_dir}")
             video_exts = config.video_extensions
+            logger.info(f"Поддерживаемые расширения: {video_exts}")
+            
             videos = []
             for ext in video_exts:
+                logger.debug(f"Поиск файлов с расширением: {ext}")
                 videos.extend(config.videos_dir.glob(f"*{ext}"))
                 videos.extend(config.videos_dir.glob(f"*{ext.upper()}"))
             
+            logger.info(f"Найдено видео файлов: {len(videos)}")
             if videos:
-                logger.info(f"Найдено видео файлов: {len(videos)}")
+                for i, video in enumerate(videos, 1):
+                    logger.info(f"  [{i}] {video.name}")
+            
+            if videos:
+                logger.info("Запуск извлечения кадров...")
                 total_frames = auto_extract_frames(
                     videos_dir=str(config.videos_dir),
                     output_dir=str(config.data_dir / "images" / "train"),
@@ -134,19 +167,25 @@ def main() -> None:
         try:
             train_images_dir = config.data_dir / "images" / "train"
             train_labels_dir = config.data_dir / "labels" / "train"
+            logger.info(f"Проверка изображений в: {train_images_dir}")
+            logger.info(f"Проверка разметки в: {train_labels_dir}")
+            
             train_images = list(train_images_dir.glob("*.jpg")) + list(train_images_dir.glob("*.png")) + list(
                 train_images_dir.glob("*.jpeg")
             )
             train_labels = list(train_labels_dir.glob("*.txt"))
             
+            logger.info(f"Найдено изображений: {len(train_images)}")
+            logger.info(f"Найдено файлов разметки: {len(train_labels)}")
+            
             if train_images and not train_labels:
-                logger.info(f"Найдено изображений для разметки: {len(train_images)}")
+                logger.info(f"Запуск авторазметки для {len(train_images)} изображений...")
                 stats = auto_prelabel(
                     images_dir=str(train_images_dir),
                     labels_dir=str(train_labels_dir),
                     conf_threshold=config.prelabel_conf_threshold,
                 )
-                logger.info(f"Авторазметка завершена: обработано {stats.get('processed', 0)}, аннотаций {stats.get('annotations', 0)}")
+                logger.info(f"Авторазметка завершена: обработано {stats.get('processed', 0)}, аннотаций {stats.get('annotations', 0)}, ошибок {stats.get('errors', 0)}")
                 logger.info("Рекомендуется после этого пройтись по разметке в LabelImg и подправить сложные случаи.")
             else:
                 if not train_images:
@@ -217,14 +256,22 @@ def main() -> None:
         logger.info("ШАГ 6: Обучение модели YOLOv8")
         logger.info("=" * 70)
         try:
+            logger.info("Инициализация PPEDetectorTrainer...")
+            logger.info(f"  model_name: {config.model_name}")
+            logger.info(f"  config_path: {config.config_dir / 'ppe_data.yaml'}")
+            logger.info(f"  project_dir: {config.models_dir}")
+            logger.info(f"  experiment_name: {config.experiment_name}")
+            
             trainer = PPEDetectorTrainer(
                 model_name=config.model_name,
                 config_path=str(config.config_dir / "ppe_data.yaml"),
                 project_dir=str(config.models_dir),
                 experiment_name=config.experiment_name,
             )
+            logger.info("PPEDetectorTrainer инициализирован")
             
             # Автоматический выбор параметров в зависимости от устройства
+            logger.info(f"Текущее устройство: {config.device}")
             if config.device == "cpu":
                 epochs = 20
                 batch_size = 8
@@ -234,6 +281,9 @@ def main() -> None:
                 batch_size = config.batch_size
                 logger.info(f"Используется GPU: epochs={epochs}, batch_size={batch_size}")
             
+            logger.info("Запуск обучения...")
+            logger.info(f"Параметры: epochs={epochs}, img_size={config.img_size}, batch_size={batch_size}, patience={config.patience}, workers={config.workers}")
+            
             train_results = trainer.train(
                 epochs=epochs,
                 img_size=config.img_size,
@@ -241,6 +291,8 @@ def main() -> None:
                 patience=config.patience,
                 workers=config.workers,
             )
+            
+            logger.info(f"Результат обучения получен: success={train_results.get('success', False)}")
             
             if not train_results.get("success", False):
                 logger.error("Обучение завершилось с ошибкой.")
@@ -250,6 +302,7 @@ def main() -> None:
             best_model_path = Path(train_results.get("best_model", ""))
             logger.info("Обучение завершено успешно!")
             logger.info(f"Лучшая модель: {best_model_path}")
+            logger.info(f"Модель существует: {best_model_path.exists()}")
         except Exception as e:
             logger.error(f"Ошибка при обучении модели: {e}", exc_info=True)
             raise

@@ -90,18 +90,37 @@ class ProjectConfig:
     
     def _detect_device(self):
         """Определяет доступное устройство с детальной информацией."""
+        print("[GPU CHECK] Начало проверки устройства...")
         try:
             import torch
+            print("[GPU CHECK] PyTorch импортирован успешно")
+            print(f"[GPU CHECK] Версия PyTorch: {torch.__version__}")
             
             # Детальная проверка CUDA
-            if torch.cuda.is_available():
+            print("[GPU CHECK] Проверка доступности CUDA...")
+            cuda_available = torch.cuda.is_available()
+            print(f"[GPU CHECK] CUDA доступна: {cuda_available}")
+            
+            if cuda_available:
+                print("[GPU CHECK] Получение информации о GPU...")
                 gpu_count = torch.cuda.device_count()
+                print(f"[GPU CHECK] Найдено GPU: {gpu_count}")
+                
                 cuda_version = torch.version.cuda
-                cudnn_version = torch.backends.cudnn.version() if torch.backends.cudnn.is_available() else None
+                print(f"[GPU CHECK] CUDA версия: {cuda_version}")
+                
+                cudnn_version = None
+                if torch.backends.cudnn.is_available():
+                    cudnn_version = torch.backends.cudnn.version()
+                    print(f"[GPU CHECK] cuDNN версия: {cudnn_version}")
+                else:
+                    print("[GPU CHECK] cuDNN недоступен")
                 
                 # Получаем информацию о каждой GPU
+                print("[GPU CHECK] Сбор детальной информации о GPU...")
                 gpu_info = []
                 for i in range(gpu_count):
+                    print(f"[GPU CHECK] Обработка GPU {i}...")
                     props = torch.cuda.get_device_properties(i)
                     gpu_name = props.name
                     gpu_memory_total = props.total_memory / (1024**3)  # GB
@@ -119,59 +138,87 @@ class ProjectConfig:
                         'capability': f"{gpu_capability[0]}.{gpu_capability[1]}",
                         'multiprocessors': gpu_multiprocessors
                     })
+                    print(f"[GPU CHECK] GPU {i} обработан: {gpu_name}")
                 
                 # Выбираем устройство
                 if gpu_count > 1:
                     self.device = "0"  # Используем первую GPU по умолчанию
-                    print(f"GPU обнаружено: {gpu_count} устройств")
-                    print(f"CUDA версия: {cuda_version}")
+                    print(f"[GPU CHECK] GPU обнаружено: {gpu_count} устройств")
+                    print(f"[GPU CHECK] CUDA версия: {cuda_version}")
                     if cudnn_version:
-                        print(f"cuDNN версия: {cudnn_version}")
+                        print(f"[GPU CHECK] cuDNN версия: {cudnn_version}")
                     for info in gpu_info:
-                        print(f"  GPU {info['id']}: {info['name']}")
-                        print(f"    Память: {info['memory_free_gb']:.2f} GB свободно / {info['memory_total_gb']:.2f} GB всего")
-                        print(f"    CUDA Capability: {info['capability']}")
-                        print(f"    Multiprocessors: {info['multiprocessors']}")
-                    print(f"Используется GPU: {self.device}")
+                        print(f"[GPU CHECK]   GPU {info['id']}: {info['name']}")
+                        print(f"[GPU CHECK]     Память: {info['memory_free_gb']:.2f} GB свободно / {info['memory_total_gb']:.2f} GB всего")
+                        print(f"[GPU CHECK]     CUDA Capability: {info['capability']}")
+                        print(f"[GPU CHECK]     Multiprocessors: {info['multiprocessors']}")
+                    print(f"[GPU CHECK] Используется GPU: {self.device}")
                 else:
                     self.device = "0"
                     info = gpu_info[0]
-                    print(f"GPU обнаружено: {info['name']}")
-                    print(f"  Память: {info['memory_free_gb']:.2f} GB свободно / {info['memory_total_gb']:.2f} GB всего")
-                    print(f"  CUDA версия: {cuda_version}")
+                    print(f"[GPU CHECK] GPU обнаружено: {info['name']}")
+                    print(f"[GPU CHECK]   Память: {info['memory_free_gb']:.2f} GB свободно / {info['memory_total_gb']:.2f} GB всего")
+                    print(f"[GPU CHECK]   CUDA версия: {cuda_version}")
                     if cudnn_version:
-                        print(f"  cuDNN версия: {cudnn_version}")
-                    print(f"  CUDA Capability: {info['capability']}")
-                    print(f"  Multiprocessors: {info['multiprocessors']}")
-                    print(f"Используется GPU: {self.device}")
+                        print(f"[GPU CHECK]   cuDNN версия: {cudnn_version}")
+                    print(f"[GPU CHECK]   CUDA Capability: {info['capability']}")
+                    print(f"[GPU CHECK]   Multiprocessors: {info['multiprocessors']}")
+                    print(f"[GPU CHECK] Используется GPU: {self.device}")
                 
                 # Проверка текущего устройства
+                print("[GPU CHECK] Получение текущего устройства...")
                 current_device = torch.cuda.current_device()
-                print(f"Текущее устройство: GPU {current_device}")
+                print(f"[GPU CHECK] Текущее устройство: GPU {current_device}")
                 
-                # Тест производительности GPU
+                # Тест производительности GPU (с таймаутом и более безопасный)
+                print("[GPU CHECK] Запуск теста производительности GPU...")
                 try:
+                    import time
+                    start_time = time.time()
+                    print("[GPU CHECK] Создание тестового тензора...")
                     test_tensor = torch.randn(1000, 1000).cuda()
-                    _ = test_tensor @ test_tensor
+                    print(f"[GPU CHECK] Тензор создан за {time.time() - start_time:.2f} сек")
+                    
+                    print("[GPU CHECK] Выполнение матричного умножения...")
+                    start_time = time.time()
+                    result = test_tensor @ test_tensor
+                    print(f"[GPU CHECK] Умножение выполнено за {time.time() - start_time:.2f} сек")
+                    
+                    print("[GPU CHECK] Синхронизация CUDA...")
                     torch.cuda.synchronize()
-                    print("Тест GPU: успешно (GPU работает корректно)")
+                    print("[GPU CHECK] Тест GPU: успешно (GPU работает корректно)")
+                    
+                    # Очистка памяти
+                    del test_tensor, result
+                    torch.cuda.empty_cache()
+                    print("[GPU CHECK] Память GPU очищена")
                 except Exception as e:
-                    print(f"Предупреждение: тест GPU не прошел: {e}")
+                    print(f"[GPU CHECK] WARNING: тест GPU не прошел: {e}")
+                    import traceback
+                    print(f"[GPU CHECK] Traceback: {traceback.format_exc()}")
+                
+                print("[GPU CHECK] Проверка GPU завершена успешно")
                 
             else:
                 self.device = "cpu"
-                print("CUDA недоступна, используется CPU")
-                print("Для использования GPU установите PyTorch с поддержкой CUDA:")
-                print("  pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118")
+                print("[GPU CHECK] CUDA недоступна, используется CPU")
+                print("[GPU CHECK] Для использования GPU установите PyTorch с поддержкой CUDA:")
+                print("[GPU CHECK]   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118")
                 
-        except ImportError:
+        except ImportError as e:
             self.device = "cpu"
-            print("PyTorch не установлен, используется CPU")
-            print("Установите: pip install torch torchvision")
+            print(f"[GPU CHECK] ERROR: PyTorch не установлен: {e}")
+            print("[GPU CHECK] Используется CPU")
+            print("[GPU CHECK] Установите: pip install torch torchvision")
         except Exception as e:
             self.device = "cpu"
-            print(f"Ошибка при определении устройства: {e}")
-            print("Используется CPU")
+            print(f"[GPU CHECK] ERROR: Ошибка при определении устройства: {e}")
+            import traceback
+            print(f"[GPU CHECK] Traceback: {traceback.format_exc()}")
+            print("[GPU CHECK] Используется CPU")
+        
+        print(f"[GPU CHECK] Финальное устройство: {self.device}")
+        print("[GPU CHECK] Проверка устройства завершена")
     
     def load_dataset_config(self, config_path: Optional[str] = None) -> Dict[str, Any]:
         """

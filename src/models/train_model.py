@@ -10,9 +10,19 @@ trainer.train(epochs=30, batch_size=16)
 from pathlib import Path
 import torch
 import logging
+import multiprocessing
+import platform
 from typing import Optional, Dict, List
 from datetime import datetime
 # YOLO импортируется лениво внутри методов, чтобы не замедлять импорт модуля
+
+# Настройка multiprocessing для Windows (исправляет ConnectionResetError)
+if platform.system() == 'Windows':
+    try:
+        multiprocessing.set_start_method('spawn', force=True)
+    except RuntimeError:
+        # Если уже установлен, игнорируем
+        pass
 
 
 class PPEDetectorTrainer:
@@ -124,7 +134,7 @@ class PPEDetectorTrainer:
         img_size: int = 640,
         batch_size: int = 16,
         patience: int = 10,
-        workers: int = 8,
+        workers: Optional[int] = None,
         save: bool = True,
         plots: bool = True,
         verbose: bool = True
@@ -137,7 +147,7 @@ class PPEDetectorTrainer:
             img_size: Размер входного изображения
             batch_size: Размер батча
             patience: Ранняя остановка после N эпох без улучшения
-            workers: Количество worker'ов для загрузки данных
+            workers: Количество worker'ов для загрузки данных (None = автоопределение)
             save: Сохранять чекпоинты
             plots: Генерировать графики
             verbose: Подробный вывод
@@ -145,8 +155,20 @@ class PPEDetectorTrainer:
         Returns:
             Словарь с результатами обучения
         """
+        # Автоматическое определение количества workers для избежания ConnectionResetError
+        if workers is None:
+            if platform.system() == 'Windows':
+                # На Windows используем меньше workers для избежания проблем с multiprocessing
+                workers = min(4, multiprocessing.cpu_count() // 2)
+                if workers == 0:
+                    workers = 1
+            else:
+                # На Linux/Mac можно использовать больше
+                workers = min(8, multiprocessing.cpu_count())
+        
         self.logger.info("=== НАЧАЛО ОБУЧЕНИЯ ===")
-        self.logger.info(f"Параметры: epochs={epochs}, img_size={img_size}, batch={batch_size}")
+        self.logger.info(f"Параметры: epochs={epochs}, img_size={img_size}, batch={batch_size}, workers={workers}")
+        self.logger.info(f"Платформа: {platform.system()}, CPU cores: {multiprocessing.cpu_count()}")
         
         # Создаем директорию проекта
         experiment_dir = self.project_dir / self.experiment_name
@@ -219,7 +241,7 @@ class PPEDetectorTrainer:
         
         self.logger.info(f"Директория эксперимента: {experiment_dir}")
         
-        # Запуск обучения
+        # Запуск обучения с обработкой ошибок multiprocessing
         try:
             self.logger.info("Запуск обучения...")
             results = model.train(**train_params)
@@ -234,6 +256,7 @@ class PPEDetectorTrainer:
             self.logger.info(f"Последняя модель: {last_model}")
             
             # Метрики
+            final_metrics = None
             results_csv = experiment_dir / "results.csv"
             if results_csv.exists():
                 import pandas as pd
@@ -250,12 +273,61 @@ class PPEDetectorTrainer:
                 'best_model': str(best_model),
                 'last_model': str(last_model),
                 'results': results,
-                'metrics': final_metrics if 'final_metrics' in locals() else None
+                'metrics': final_metrics
             }
             
         except KeyboardInterrupt:
             self.logger.warning("Обучение прервано пользователем")
             return {'success': False, 'error': 'Interrupted by user'}
+        except (ConnectionResetError, RuntimeError) as e:
+            # Обработка ошибок multiprocessing (ConnectionResetError, RuntimeError)
+            error_str = str(e).lower()
+            if 'connection' in error_str or 'multiprocessing' in error_str or 'resource_sharer' in error_str:
+                self.logger.warning(f"Ошибка multiprocessing: {e}")
+                self.logger.info("Попытка перезапуска с workers=0 (без multiprocessing)...")
+                
+                # Пробуем с workers=0 (без multiprocessing)
+                train_params['workers'] = 0
+                try:
+                    results = model.train(**train_params)
+                    self.logger.info("Обучение успешно завершено с workers=0!")
+                    
+                    # Статистика результатов
+                    best_model = experiment_dir / "weights" / "best.pt"
+                    last_model = experiment_dir / "weights" / "last.pt"
+                    
+                    self.logger.info(f"Лучшая модель: {best_model}")
+                    self.logger.info(f"Последняя модель: {last_model}")
+                    
+                    # Метрики
+                    final_metrics = None
+                    results_csv = experiment_dir / "results.csv"
+                    if results_csv.exists():
+                        import pandas as pd
+                        df = pd.read_csv(results_csv)
+                        final_metrics = df.iloc[-1]
+                        self.logger.info(
+                            f"Финальные метрики: mAP50={final_metrics.get('metrics/mAP50(B)', 'N/A'):.3f}, "
+                            f"mAP50-95={final_metrics.get('metrics/mAP50-95(B)', 'N/A'):.3f}"
+                        )
+                    
+                    return {
+                        'success': True,
+                        'experiment_dir': str(experiment_dir),
+                        'best_model': str(best_model),
+                        'last_model': str(last_model),
+                        'results': results,
+                        'metrics': final_metrics,
+                        'warning': 'Used workers=0 due to multiprocessing error'
+                    }
+                except Exception as retry_error:
+                    self.logger.error(f"Ошибка при повторной попытке: {retry_error}")
+                    import traceback
+                    self.logger.error(traceback.format_exc())
+                    return {'success': False, 'error': f'Multiprocessing error: {e}, retry failed: {retry_error}'}
+            else:
+                # Другие RuntimeError - пробрасываем дальше
+                raise
         except Exception as e:
             self.logger.error(f"Ошибка обучения: {e}")
             import traceback

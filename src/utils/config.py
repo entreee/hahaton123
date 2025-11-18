@@ -5,10 +5,9 @@
 """
 
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 import yaml
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass
@@ -41,7 +40,7 @@ class ProjectConfig:
     img_size: int = 1600  # Максимальный размер для лучшей детекции очень маленьких объектов (было 640)
     batch_size: int = 4  # Уменьшен из-за очень большого размера изображения
     patience: int = 20  # Еще больше терпения для очень сложных случаев
-    workers: int = 8
+    workers: Optional[int] = None  # None = автоопределение (исправляет ConnectionResetError на Windows)
     device: str = "auto"
     
     # Разметка

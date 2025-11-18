@@ -79,23 +79,44 @@ def main() -> None:
         logger.info("Начало импорта модулей...")
         # Импорты локальных модулей (после добавления пути)
         logger.info("Импорт config...")
+        import time
+        start_time = time.time()
         from src.utils.config import config, ProjectConfig
-        logger.info("Импорт config завершен")
+        logger.info(f"Импорт config завершен за {time.time() - start_time:.2f} сек")
         
         logger.info("Импорт data модулей...")
+        start_time = time.time()
+        
+        logger.info("  Импорт extract_frames...")
         from src.data.extract_frames import auto_extract_frames
+        logger.info(f"  extract_frames импортирован за {time.time() - start_time:.2f} сек")
+        
+        start_time = time.time()
+        logger.info("  Импорт auto_prelabel...")
         from src.data.auto_prelabel import auto_prelabel
+        logger.info(f"  auto_prelabel импортирован за {time.time() - start_time:.2f} сек")
+        
+        start_time = time.time()
+        logger.info("  Импорт split_dataset...")
         from src.data.split_dataset import split_dataset
+        logger.info(f"  split_dataset импортирован за {time.time() - start_time:.2f} сек")
+        
+        start_time = time.time()
+        logger.info("  Импорт data_utils...")
         from src.data.data_utils import check_data_structure, get_dataset_stats
+        logger.info(f"  data_utils импортирован за {time.time() - start_time:.2f} сек")
+        
         logger.info("Импорт data модулей завершен")
         
         logger.info("Импорт models модулей...")
+        start_time = time.time()
         from src.models.train_model import PPEDetectorTrainer
-        logger.info("Импорт models модулей завершен")
+        logger.info(f"Импорт models модулей завершен за {time.time() - start_time:.2f} сек")
         
         logger.info("Импорт inference модулей...")
+        start_time = time.time()
         from src.inference.detect_utils import PPEDetector
-        logger.info("Импорт inference модулей завершен")
+        logger.info(f"Импорт inference модулей завершен за {time.time() - start_time:.2f} сек")
         
         logger.info("Все модули успешно импортированы")
         

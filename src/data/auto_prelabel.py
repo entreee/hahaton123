@@ -9,7 +9,7 @@ auto_prelabel(images_dir="data/images/train", labels_dir="data/labels/train")
 from pathlib import Path
 from typing import Optional
 import cv2
-from ultralytics import YOLO
+# YOLO импортируется лениво внутри функции, чтобы не замедлять импорт модуля
 
 
 def auto_prelabel(
@@ -47,8 +47,10 @@ def auto_prelabel(
     print(f"Найдено изображений: {len(image_files)}")
     print(f"Порог уверенности: {conf_threshold}")
     
-    # Загрузка модели
+    # Загрузка модели (ленивый импорт YOLO)
     try:
+        print("Импорт YOLO...")
+        from ultralytics import YOLO
         print("Загрузка предобученной модели YOLOv8n...")
         model = YOLO("yolov8n.pt")
     except Exception as e:

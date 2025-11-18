@@ -49,6 +49,9 @@ class ProjectConfig:
     random_seed: int = 42
     prelabel_conf_threshold: float = 0.3
     
+    # Извлечение кадров (уменьшен шаг для большего количества кадров)
+    frame_extraction_step: int = 15  # Извлекать каждый 15-й кадр (было 30) - увеличивает датасет в 2 раза
+    
     def __post_init__(self):
         """Инициализация после создания объекта."""
         if self.image_extensions is None:

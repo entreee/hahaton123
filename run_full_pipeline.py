@@ -168,10 +168,11 @@ def main() -> None:
             
             if videos:
                 logger.info("Запуск извлечения кадров...")
+                logger.info(f"Шаг извлечения: каждый {config.frame_extraction_step}-й кадр (уменьшен для большего датасета)")
                 total_frames = auto_extract_frames(
                     videos_dir=str(config.videos_dir),
                     output_dir=str(config.data_dir / "images" / "train"),
-                    step=30,  # фиксированный шаг, чтобы не было слишком много кадров
+                    step=config.frame_extraction_step,  # Уменьшен для увеличения датасета
                 )
                 logger.info(f"Кадры извлечены: {total_frames}")
             else:
@@ -312,6 +313,14 @@ def main() -> None:
             
             logger.info("Запуск обучения...")
             logger.info(f"Параметры: epochs={epochs}, img_size={img_size}, batch_size={batch_size}, patience={config.patience}, workers={config.workers}")
+            logger.info("Расширение датасета через augmentation:")
+            logger.info("  - Mosaic: 1.0 (создает много новых комбинаций из 4 изображений)")
+            logger.info("  - Mixup: 0.3 (смешивает изображения для разнообразия)")
+            logger.info("  - Copy-paste: 0.5 (копирует объекты между изображениями)")
+            logger.info("  - Horizontal flip: 0.5 (удваивает датасет)")
+            logger.info("  - Scale: 0.98 (обучение на разных масштабах)")
+            logger.info("  - Translate: 0.4 (разнообразие позиций)")
+            logger.info("  - HSV augmentation: увеличено (разнообразие цветов для белых и оранжевых касок)")
             
             train_results = trainer.train(
                 epochs=epochs,

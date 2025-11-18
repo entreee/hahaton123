@@ -52,11 +52,11 @@ def split_dataset(
     
     # Проверяем наличие исходных данных
     if not train_images_path.exists():
-        print(f"❌ Директория не найдена: {train_images_dir}")
+        print(f"Директория не найдена: {train_images_dir}")
         return 0, 0
     
     if not train_labels_path.exists():
-        print(f"❌ Директория не найдена: {train_labels_dir}")
+        print(f"Директория не найдена: {train_labels_dir}")
         return 0, 0
     
     # Получаем все изображения
@@ -68,7 +68,7 @@ def split_dataset(
     )
     
     if len(images) == 0:
-        print(f"❌ Не найдено изображений в {train_images_dir}")
+        print(f"Не найдено изображений в {train_images_dir}")
         print("Поддерживаемые форматы: JPG, PNG, JPEG, BMP")
         return 0, 0
     
@@ -80,9 +80,9 @@ def split_dataset(
     val_images = images[:val_count]
     train_count = len(images) - val_count
     
-    print(f"🔍 Всего изображений: {len(images)}")
-    print(f"📊 Train: {train_count} ({(1-val_ratio)*100:.1f}%)")
-    print(f"📊 Val: {val_count} ({val_ratio*100:.1f}%)")
+    print(f"Всего изображений: {len(images)}")
+    print(f"Train: {train_count} ({(1-val_ratio)*100:.1f}%)")
+    print(f"Val: {val_count} ({val_ratio*100:.1f}%)")
     print()
     
     moved_images = 0
@@ -97,7 +97,7 @@ def split_dataset(
             shutil.move(str(img), str(dest_img))
             moved_images += 1
         except Exception as e:
-            print(f"❌ Ошибка перемещения {img.name}: {e}")
+            print(f"Ошибка перемещения {img.name}: {e}")
             continue
         
         # Перемещаем соответствующую разметку
@@ -108,19 +108,19 @@ def split_dataset(
                 shutil.move(str(label_file), str(dest_label))
                 moved_labels += 1
             except Exception as e:
-                print(f"❌ Ошибка перемещения разметки {label_file.name}: {e}")
+                print(f"Ошибка перемещения разметки {label_file.name}: {e}")
         else:
             missing_labels += 1
-            print(f"⚠️  [{i}/{len(val_images)}] Нет разметки для {img.name}")
+            print(f"[{i}/{len(val_images)}] Нет разметки для {img.name}")
     
     # Финальная статистика
-    print(f"\n✅ РАЗДЕЛЕНИЕ ДАТАСЕТА ЗАВЕРШЕНО!")
-    print(f"📁 Перемещено изображений: {moved_images}/{val_count}")
-    print(f"📄 Перемещено разметок: {moved_labels}")
-    print(f"⚠️  Разметок не найдено: {missing_labels}")
+    print(f"\nРАЗДЕЛЕНИЕ ДАТАСЕТА ЗАВЕРШЕНО!")
+    print(f"Перемещено изображений: {moved_images}/{val_count}")
+    print(f"Перемещено разметок: {moved_labels}")
+    print(f"Разметок не найдено: {missing_labels}")
     
     if missing_labels > 0:
-        print(f"\n💡 Рекомендация: проверьте {missing_labels} изображений без разметки")
+        print(f"\nРекомендация: проверьте {missing_labels} изображений без разметки")
     
     return moved_images, moved_labels
 

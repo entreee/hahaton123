@@ -67,9 +67,9 @@ class PPEDetector:
         self.device = device
         self.model.to(device)
         
-        print(f"✅ Детектор загружен: {model_path}")
-        print(f"📱 Устройство: {device}")
-        print(f"🎯 Порог уверенности: {conf_threshold}")
+        print(f"Детектор загружен: {model_path}")
+        print(f"Устройство: {device}")
+        print(f"Порог уверенности: {conf_threshold}")
     
     def detect_image(
         self,
@@ -169,7 +169,7 @@ class PPEDetector:
             output_path = Path(output_dir) / Path(image_path).name
             Path(output_dir).mkdir(parents=True, exist_ok=True)
             cv2.imwrite(str(output_path), image)
-            print(f"💾 Результат сохранен: {output_path}")
+            print(f"Результат сохранен: {output_path}")
         
         # Конвертация BGR -> RGB для matplotlib
         image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
@@ -216,9 +216,9 @@ class PPEDetector:
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         
-        print(f"🎬 Обработка видео: {video_path}")
-        print(f"📏 Размер: {width}x{height}, FPS: {fps}, кадров: {total_frames}")
-        print(f"💾 Результат: {output_path}")
+        print(f"Обработка видео: {video_path}")
+        print(f"Размер: {width}x{height}, FPS: {fps}, кадров: {total_frames}")
+        print(f"Результат: {output_path}")
         
         # Настройка записи
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
@@ -280,7 +280,7 @@ class PPEDetector:
             # Прогресс
             if show_progress and frame_count % 30 == 0:
                 progress = frame_count / total_frames * 100
-                print(f"  📈 Прогресс: {progress:.1f}% ({frame_count}/{total_frames})")
+                print(f"  Прогресс: {progress:.1f}% ({frame_count}/{total_frames})")
             
             # Запись кадра
             out.write(frame)
@@ -290,10 +290,10 @@ class PPEDetector:
         cap.release()
         out.release()
         
-        print(f"\n✅ Видео обработано!")
-        print(f"📊 Кадров обработано: {frame_count}")
-        print(f"🎯 Детекций найдено: {total_detections}")
-        print(f"💾 Результат сохранен: {output_path}")
+        print(f"\nВидео обработано!")
+        print(f"Кадров обработано: {frame_count}")
+        print(f"Детекций найдено: {total_detections}")
+        print(f"Результат сохранен: {output_path}")
         
         return output_path
     
@@ -318,7 +318,7 @@ class PPEDetector:
         
         cap = cv2.VideoCapture(camera_id)
         if not cap.isOpened():
-            print(f"❌ Не удалось открыть камеру {camera_id}")
+            print(f"Не удалось открыть камеру {camera_id}")
             print("Проверьте подключение камеры и попробуйте camera_id=1")
             return
         
@@ -327,7 +327,7 @@ class PPEDetector:
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
         cap.set(cv2.CAP_PROP_FPS, 30)
         
-        print(f"📹 Камера запущена ({camera_id})")
+        print(f"Камера запущена ({camera_id})")
         print(f"Нажмите 'q' для выхода, 's' для скриншота")
         print(f"Порог уверенности: {conf_threshold}")
         
@@ -337,7 +337,7 @@ class PPEDetector:
         while True:
             ret, frame = cap.read()
             if not ret:
-                print("⚠️  Потеряно соединение с камерой")
+                print("Потеряно соединение с камерой")
                 break
             
             if max_frames and frame_count >= max_frames:
@@ -404,7 +404,7 @@ class PPEDetector:
             # Обработка клавиш
             key = cv2.waitKey(1) & 0xFF
             if key == ord('q'):
-                print("👋 Выход по нажатию 'q'")
+                print("Выход по нажатию 'q'")
                 break
             elif key == ord('s'):
                 # Скриншот
@@ -413,7 +413,7 @@ class PPEDetector:
                 screenshot_path = screenshot_dir / f"screenshot_{frame_count:06d}.jpg"
                 cv2.imwrite(str(screenshot_path), frame)
                 screenshot_count += 1
-                print(f"📸 Скриншот сохранен: {screenshot_path}")
+                print(f"Скриншот сохранен: {screenshot_path}")
                 print(f"Всего скриншотов: {screenshot_count}")
             
             frame_count += 1
@@ -422,9 +422,9 @@ class PPEDetector:
         cap.release()
         cv2.destroyAllWindows()
         
-        print(f"\n📹 Детекция с камеры завершена")
-        print(f"🎬 Обработано кадров: {frame_count}")
-        print(f"📸 Сохранено скриншотов: {screenshot_count}")
+        print(f"\nДетекция с камеры завершена")
+        print(f"Обработано кадров: {frame_count}")
+        print(f"Сохранено скриншотов: {screenshot_count}")
     
     def batch_predict(
         self,
@@ -459,13 +459,13 @@ class PPEDetector:
             image_files.extend(image_path.glob(ext.upper()))
         
         if len(image_files) == 0:
-            print(f"❌ Не найдено изображений в {image_folder}")
+            print(f"Не найдено изображений в {image_folder}")
             return {'processed': 0, 'detections': 0, 'errors': 0}
         
         stats = {'processed': 0, 'detections': 0, 'errors': 0}
         
-        print(f"📂 Пакетная обработка: {len(image_files)} изображений")
-        print(f"💾 Результаты: {output_folder}")
+        print(f"Пакетная обработка: {len(image_files)} изображений")
+        print(f"Результаты: {output_folder}")
         
         for i, image_file in enumerate(image_files, 1):
             try:
@@ -482,16 +482,16 @@ class PPEDetector:
                 
                 if i % 10 == 0:
                     progress = i / len(image_files) * 100
-                    print(f"  📈 Прогресс: {progress:.1f}% ({i}/{len(image_files)})")
+                    print(f"  Прогресс: {progress:.1f}% ({i}/{len(image_files)})")
             
             except Exception as e:
-                print(f"❌ Ошибка обработки {image_file.name}: {e}")
+                print(f"Ошибка обработки {image_file.name}: {e}")
                 stats['errors'] += 1
         
-        print(f"\n✅ Пакетная обработка завершена!")
-        print(f"📊 Обработано: {stats['processed']}/{len(image_files)}")
-        print(f"🎯 Детекций: {stats['detections']}")
-        print(f"⚠️  Ошибок: {stats['errors']}")
+        print(f"\nПакетная обработка завершена!")
+        print(f"Обработано: {stats['processed']}/{len(image_files)}")
+        print(f"Детекций: {stats['detections']}")
+        print(f"Ошибок: {stats['errors']}")
         
         return stats
     
@@ -516,17 +516,17 @@ class PPEDetector:
             model_size = self.model_path.stat().st_size / (1024*1024)  # MB
             info['model_size_mb'] = round(model_size, 2)
             
-            print(f"ℹ️  Информация о модели:")
-            print(f"  📁 Путь: {info['model_path']}")
-            print(f"  📦 Размер: {info['model_size_mb']} MB")
-            print(f"  🎯 Классов: {info['num_classes']}")
-            print(f"  📱 Устройство: {info['device']}")
-            print(f"  🔢 Классы: {list(info['class_names'].values())}")
+            print(f"Информация о модели:")
+            print(f"  Путь: {info['model_path']}")
+            print(f"  Размер: {info['model_size_mb']} MB")
+            print(f"  Классов: {info['num_classes']}")
+            print(f"  Устройство: {info['device']}")
+            print(f"  Классы: {list(info['class_names'].values())}")
             
             return info
             
         except Exception as e:
-            print(f"❌ Ошибка получения информации: {e}")
+            print(f"Ошибка получения информации: {e}")
             return {}
 
 

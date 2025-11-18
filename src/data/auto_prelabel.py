@@ -40,19 +40,19 @@ def auto_prelabel(
         image_files.extend(images_path.glob(ext.upper()))
     
     if len(image_files) == 0:
-        print(f"❌ Не найдено изображений в {images_dir}")
+        print(f"Не найдено изображений в {images_dir}")
         print(f"Поддерживаемые форматы: {', '.join(image_extensions)}")
         return {'processed': 0, 'annotations': 0, 'errors': 0}
     
-    print(f"🔍 Найдено изображений: {len(image_files)}")
-    print(f"📊 Порог уверенности: {conf_threshold}")
+    print(f"Найдено изображений: {len(image_files)}")
+    print(f"Порог уверенности: {conf_threshold}")
     
     # Загрузка модели
     try:
-        print("🤖 Загрузка предобученной модели YOLOv8n...")
+        print("Загрузка предобученной модели YOLOv8n...")
         model = YOLO("yolov8n.pt")
     except Exception as e:
-        print(f"❌ Ошибка загрузки модели: {e}")
+        print(f"Ошибка загрузки модели: {e}")
         print("Установите: pip install ultralytics")
         return {'processed': 0, 'annotations': 0, 'errors': 1}
     
@@ -66,7 +66,7 @@ def auto_prelabel(
             # Загрузка изображения
             image = cv2.imread(str(image_file))
             if image is None:
-                print(f"⚠️  [{i}/{len(image_files)}] Не удалось загрузить: {image_file.name}")
+                print(f"[{i}/{len(image_files)}] Не удалось загрузить: {image_file.name}")
                 stats['errors'] += 1
                 continue
             
@@ -115,22 +115,22 @@ def auto_prelabel(
             
             if i % 10 == 0 or i == len(image_files):
                 progress = i / len(image_files) * 100
-                print(f"  📈 Прогресс: {progress:.1f}% ({i}/{len(image_files)})")
+                print(f"  Прогресс: {progress:.1f}% ({i}/{len(image_files)})")
         
         except Exception as e:
-            print(f"❌ [{i}/{len(image_files)}] Ошибка обработки {image_file.name}: {e}")
+            print(f"[{i}/{len(image_files)}] Ошибка обработки {image_file.name}: {e}")
             stats['errors'] += 1
     
     # Финальная статистика
     print("\n" + "=" * 60)
-    print("✅ АВТОМАТИЧЕСКАЯ ПРЕДРАЗМЕТКА ЗАВЕРШЕНА!")
+    print("АВТОМАТИЧЕСКАЯ ПРЕДРАЗМЕТКА ЗАВЕРШЕНА!")
     print("=" * 60)
-    print(f"📊 Обработано изображений: {stats['processed']}/{len(image_files)}")
-    print(f"🎯 Создано аннотаций: {stats['annotations']}")
-    print(f"⚠️  Ошибок: {stats['errors']}")
-    print(f"💾 Файлы разметки: {labels_dir}/")
+    print(f"Обработано изображений: {stats['processed']}/{len(image_files)}")
+    print(f"Создано аннотаций: {stats['annotations']}")
+    print(f"Ошибок: {stats['errors']}")
+    print(f"Файлы разметки: {labels_dir}/")
     
-    print("\n📝 СЛЕДУЮЩИЕ ШАГИ:")
+    print("\nСЛЕДУЮЩИЕ ШАГИ:")
     print("1. Откройте LabelImg: labelImg")
     print("2. File → Open Dir → data/images/train/")
     print("3. Выберите формат YOLO (внизу окна)")

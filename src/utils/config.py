@@ -86,25 +86,92 @@ class ProjectConfig:
         for directory in directories:
             directory.mkdir(parents=True, exist_ok=True)
         
-        print("📁 Директории созданы/проверены")
+        print("Директории созданы/проверены")
     
     def _detect_device(self):
-        """Определяет доступное устройство."""
+        """Определяет доступное устройство с детальной информацией."""
         try:
             import torch
+            
+            # Детальная проверка CUDA
             if torch.cuda.is_available():
                 gpu_count = torch.cuda.device_count()
+                cuda_version = torch.version.cuda
+                cudnn_version = torch.backends.cudnn.version() if torch.backends.cudnn.is_available() else None
+                
+                # Получаем информацию о каждой GPU
+                gpu_info = []
+                for i in range(gpu_count):
+                    props = torch.cuda.get_device_properties(i)
+                    gpu_name = props.name
+                    gpu_memory_total = props.total_memory / (1024**3)  # GB
+                    gpu_memory_allocated = torch.cuda.memory_allocated(i) / (1024**3)  # GB
+                    gpu_memory_free = gpu_memory_total - gpu_memory_allocated
+                    gpu_capability = props.major, props.minor
+                    gpu_multiprocessors = props.multi_processor_count
+                    
+                    gpu_info.append({
+                        'id': i,
+                        'name': gpu_name,
+                        'memory_total_gb': round(gpu_memory_total, 2),
+                        'memory_allocated_gb': round(gpu_memory_allocated, 2),
+                        'memory_free_gb': round(gpu_memory_free, 2),
+                        'capability': f"{gpu_capability[0]}.{gpu_capability[1]}",
+                        'multiprocessors': gpu_multiprocessors
+                    })
+                
+                # Выбираем устройство
                 if gpu_count > 1:
-                    self.device = str(gpu_count)  # Multi-GPU
+                    self.device = "0"  # Используем первую GPU по умолчанию
+                    print(f"GPU обнаружено: {gpu_count} устройств")
+                    print(f"CUDA версия: {cuda_version}")
+                    if cudnn_version:
+                        print(f"cuDNN версия: {cudnn_version}")
+                    for info in gpu_info:
+                        print(f"  GPU {info['id']}: {info['name']}")
+                        print(f"    Память: {info['memory_free_gb']:.2f} GB свободно / {info['memory_total_gb']:.2f} GB всего")
+                        print(f"    CUDA Capability: {info['capability']}")
+                        print(f"    Multiprocessors: {info['multiprocessors']}")
+                    print(f"Используется GPU: {self.device}")
                 else:
-                    self.device = "0"  # Single GPU
-                print(f"🔥 GPU доступно: {self.device}")
+                    self.device = "0"
+                    info = gpu_info[0]
+                    print(f"GPU обнаружено: {info['name']}")
+                    print(f"  Память: {info['memory_free_gb']:.2f} GB свободно / {info['memory_total_gb']:.2f} GB всего")
+                    print(f"  CUDA версия: {cuda_version}")
+                    if cudnn_version:
+                        print(f"  cuDNN версия: {cudnn_version}")
+                    print(f"  CUDA Capability: {info['capability']}")
+                    print(f"  Multiprocessors: {info['multiprocessors']}")
+                    print(f"Используется GPU: {self.device}")
+                
+                # Проверка текущего устройства
+                current_device = torch.cuda.current_device()
+                print(f"Текущее устройство: GPU {current_device}")
+                
+                # Тест производительности GPU
+                try:
+                    test_tensor = torch.randn(1000, 1000).cuda()
+                    _ = test_tensor @ test_tensor
+                    torch.cuda.synchronize()
+                    print("Тест GPU: успешно (GPU работает корректно)")
+                except Exception as e:
+                    print(f"Предупреждение: тест GPU не прошел: {e}")
+                
             else:
                 self.device = "cpu"
-                print("💻 Используется CPU")
+                print("CUDA недоступна, используется CPU")
+                print("Для использования GPU установите PyTorch с поддержкой CUDA:")
+                print("  pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118")
+                
         except ImportError:
             self.device = "cpu"
-            print("⚠️  PyTorch не установлен, используется CPU")
+            print("PyTorch не установлен, используется CPU")
+            print("Установите: pip install torch torchvision")
+        except Exception as e:
+            self.device = "cpu"
+            print(f"Ошибка при определении устройства: {e}")
+            print("Используется CPU")
     
     def load_dataset_config(self, config_path: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -128,7 +195,7 @@ class ProjectConfig:
             with open(config_file, 'r', encoding='utf-8') as f:
                 config = yaml.safe_load(f)
             
-            print(f"📄 Конфигурация загружена: {config_file}")
+            print(f"Конфигурация загружена: {config_file}")
             print(f"Классов: {config.get('nc', 'N/A')}")
             print(f"Классы: {config.get('names', 'N/A')}")
             
@@ -175,13 +242,13 @@ names:
             with open(config_file, 'w', encoding='utf-8') as f:
                 f.write(config_content)
             
-            print(f"✅ Конфигурация создана: {config_file}")
-            print(f"📊 Классы: {list(self.classes.values())}")
+            print(f"Конфигурация создана: {config_file}")
+            print(f"Классы: {list(self.classes.values())}")
             
             return config_file
             
         except Exception as e:
-            print(f"❌ Ошибка создания конфигурации: {e}")
+            print(f"Ошибка создания конфигурации: {e}")
             return config_file
     
     def create_classes_file(self, classes_path: Optional[str] = None) -> Path:
@@ -205,13 +272,13 @@ names:
                 for class_name in self.classes.values():
                     f.write(f"{class_name}\n")
             
-            print(f"✅ Файл классов создан: {classes_file}")
-            print(f"📝 Классы для LabelImg: {list(self.classes.values())}")
+            print(f"Файл классов создан: {classes_file}")
+            print(f"Классы для LabelImg: {list(self.classes.values())}")
             
             return classes_file
             
         except Exception as e:
-            print(f"❌ Ошибка создания файла классов: {e}")
+            print(f"Ошибка создания файла классов: {e}")
             return classes_file
     
     def get_paths_summary(self) -> Dict[str, Path]:
@@ -242,14 +309,14 @@ names:
         paths = self.get_paths_summary()
         validation = {}
         
-        print("🔍 ПРОВЕРКА ПУТЕЙ ПРОЕКТА")
+        print("ПРОВЕРКА ПУТЕЙ ПРОЕКТА")
         print("-" * 40)
         
         for name, path in paths.items():
             exists = path.exists()
             validation[name] = exists
             
-            status = "✅" if exists else "❌"
+            status = "OK" if exists else "MISSING"
             print(f"{status} {name}: {path}")
         
         # Подробная проверка данных
@@ -258,13 +325,13 @@ names:
                        len(list(self.data_dir.rglob("*.png")))
             label_count = len(list(self.data_dir.rglob("*.txt")))
             
-            print(f"\n📊 Данные: {img_count} изображений, {label_count} разметок")
+            print(f"\nДанные: {img_count} изображений, {label_count} разметок")
         
         missing_count = sum(1 for exists in validation.values() if not exists)
         if missing_count == 0:
-            print("\n🎉 Все пути корректны!")
+            print("\nВсе пути корректны!")
         else:
-            print(f"\n⚠️  Отсутствует {missing_count} путей")
+            print(f"\nОтсутствует {missing_count} путей")
         
         return validation
 
@@ -290,13 +357,13 @@ if __name__ == "__main__":
     # Загрузка конфигурации датасета
     dataset_config = config.load_dataset_config()
     
-    print(f"\n🎯 Конфигурация готова!")
+    print(f"\nКонфигурация готова!")
     print(f"Классов: {dataset_config.get('nc', 0)}")
     print(f"Устройство: {config.device}")
     
     # Пример путей
     paths = config.get_paths_summary()
-    print(f"\n📁 Основные пути:")
+    print(f"\nОсновные пути:")
     for name, path in paths.items():
-        status = "✅" if path.exists() else "⚠️"
+        status = "OK" if path.exists() else "MISSING"
         print(f"  {status} {name}: {path}")

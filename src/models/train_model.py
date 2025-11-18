@@ -74,13 +74,49 @@ class PPEDetectorTrainer:
         self.logger.info(f"Конфигурация загружена: {self.config_path}")
     
     def _detect_device(self) -> str:
-        """Определяет доступное устройство (GPU/CPU)."""
+        """Определяет доступное устройство (GPU/CPU) с детальной диагностикой."""
         if torch.cuda.is_available():
             gpu_count = torch.cuda.device_count()
+            cuda_version = torch.version.cuda
+            cudnn_version = torch.backends.cudnn.version() if torch.backends.cudnn.is_available() else None
+            
+            self.logger.info(f"CUDA доступна: версия {cuda_version}")
+            if cudnn_version:
+                self.logger.info(f"cuDNN доступен: версия {cudnn_version}")
+            
+            # Детальная информация о GPU
+            for i in range(gpu_count):
+                props = torch.cuda.get_device_properties(i)
+                memory_total = props.total_memory / (1024**3)  # GB
+                memory_allocated = torch.cuda.memory_allocated(i) / (1024**3)  # GB
+                memory_free = memory_total - memory_allocated
+                capability = f"{props.major}.{props.minor}"
+                
+                self.logger.info(f"GPU {i}: {props.name}")
+                self.logger.info(f"  Память: {memory_free:.2f} GB свободно / {memory_total:.2f} GB всего")
+                self.logger.info(f"  CUDA Capability: {capability}")
+                self.logger.info(f"  Multiprocessors: {props.multi_processor_count}")
+            
             if gpu_count > 1:
-                return f"{gpu_count}"  # Multi-GPU
-            return "0"  # Single GPU
-        return "cpu"
+                device = "0"  # Используем первую GPU
+                self.logger.info(f"Обнаружено {gpu_count} GPU, используется GPU {device}")
+            else:
+                device = "0"
+                self.logger.info(f"Используется GPU {device}")
+            
+            # Тест производительности
+            try:
+                test_tensor = torch.randn(1000, 1000).cuda()
+                _ = test_tensor @ test_tensor
+                torch.cuda.synchronize()
+                self.logger.info("Тест GPU: успешно")
+            except Exception as e:
+                self.logger.warning(f"Тест GPU не прошел: {e}")
+            
+            return device
+        else:
+            self.logger.warning("CUDA недоступна, используется CPU")
+            return "cpu"
     
     def train(
         self,
@@ -177,10 +213,10 @@ class PPEDetectorTrainer:
         
         # Запуск обучения
         try:
-            self.logger.info("🚀 Запуск обучения...")
+            self.logger.info("Запуск обучения...")
             results = model.train(**train_params)
             
-            self.logger.info("✅ Обучение успешно завершено!")
+            self.logger.info("Обучение успешно завершено!")
             
             # Статистика результатов
             best_model = experiment_dir / "weights" / "best.pt"
@@ -210,10 +246,10 @@ class PPEDetectorTrainer:
             }
             
         except KeyboardInterrupt:
-            self.logger.warning("⚠️  Обучение прервано пользователем")
+            self.logger.warning("Обучение прервано пользователем")
             return {'success': False, 'error': 'Interrupted by user'}
         except Exception as e:
-            self.logger.error(f"❌ Ошибка обучения: {e}")
+            self.logger.error(f"Ошибка обучения: {e}")
             import traceback
             self.logger.error(traceback.format_exc())
             return {'success': False, 'error': str(e)}
@@ -255,7 +291,7 @@ class PPEDetectorTrainer:
                 name=f"{self.experiment_name}_validation"
             )
             
-            self.logger.info("✅ Валидация завершена")
+            self.logger.info("Валидация завершена")
             self.logger.info(f"mAP50: {results.box.map50:.3f}")
             self.logger.info(f"mAP50-95: {results.box.map:.3f}")
             
@@ -350,7 +386,7 @@ names:
     with open(config, 'w') as f:
         f.write(config_content)
     
-    print(f"✅ Конфигурация создана: {config}")
+        print(f"Конфигурация создана: {config}")
     print(f"Классы: {classes}")
     
     return config
@@ -364,7 +400,7 @@ if __name__ == "__main__":
     results = trainer.train(epochs=30, batch_size=16)
     
     if results['success']:
-        print(f"🎉 Обучение завершено успешно!")
+        print(f"Обучение завершено успешно!")
         print(f"Модель: {results['best_model']}")
         
         # Валидация
@@ -377,4 +413,4 @@ if __name__ == "__main__":
         trainer.predict_sample("data/images/val/sample.jpg", save_result=True)
     
     else:
-        print(f"❌ Ошибка обучения: {results.get('error', 'Unknown error')}")
+        print(f"Ошибка обучения: {results.get('error', 'Unknown error')}")

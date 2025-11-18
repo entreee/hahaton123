@@ -31,7 +31,7 @@ def extract_frames_from_video(
     cap = cv2.VideoCapture(str(video_path))
     
     if not cap.isOpened():
-        print(f"⚠️  Не удалось открыть видео: {video_path}")
+        print(f"Не удалось открыть видео: {video_path}")
         return 0
     
     frame_count = 0
@@ -53,7 +53,7 @@ def extract_frames_from_video(
         frame_count += 1
     
     cap.release()
-    print(f"  ✓ Сохранено кадров: {saved_count} (из {frame_count} всего)")
+    print(f"  Сохранено кадров: {saved_count} (из {frame_count} всего)")
     return saved_count
 
 
@@ -78,7 +78,7 @@ def auto_extract_frames(
     output_path.mkdir(parents=True, exist_ok=True)
     
     if not videos_path.exists():
-        print(f"❌ Папка '{videos_dir}' не найдена!")
+        print(f"Папка '{videos_dir}' не найдена!")
         print(f"Создайте папку '{videos_dir}' и поместите туда видео файлы.")
         return 0
     
@@ -89,7 +89,7 @@ def auto_extract_frames(
         video_files.extend(videos_path.glob(f"*{ext.upper()}"))
     
     if len(video_files) == 0:
-        print(f"❌ Не найдено видео файлов в '{videos_dir}'!")
+        print(f"Не найдено видео файлов в '{videos_dir}'!")
         print(f"Поддерживаемые форматы: {', '.join(video_extensions)}")
         return 0
     
@@ -101,7 +101,7 @@ def auto_extract_frames(
         saved = extract_frames_from_video(video_file, output_path, step)
         total_saved += saved
     
-    print(f"\n✅ Извлечено {total_saved} кадров в {output_dir}/")
+    print(f"\nИзвлечено {total_saved} кадров в {output_dir}/")
     return total_saved
 
 

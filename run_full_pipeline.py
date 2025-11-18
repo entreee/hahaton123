@@ -300,9 +300,9 @@ def main() -> None:
             logger.info(f"  - Порог уверенности: {config.conf_threshold} (понижен для маленьких объектов)")
             
             if config.device == "cpu":
-                epochs = 30  # Увеличено для CPU
-                batch_size = 4  # Уменьшено из-за большого размера изображения
-                img_size = 960  # Немного уменьшено для CPU, но все еще больше чем было
+                epochs = 50  # Увеличено для CPU
+                batch_size = 2  # Уменьшено из-за очень большого размера изображения
+                img_size = 1280  # Уменьшено для CPU, но все еще больше чем было
                 logger.info(f"Используется CPU: epochs={epochs}, batch_size={batch_size}, img_size={img_size}")
             else:
                 epochs = config.epochs

@@ -292,22 +292,30 @@ def main() -> None:
             logger.info("PPEDetectorTrainer инициализирован")
             
             # Автоматический выбор параметров в зависимости от устройства
+            # Для маленьких объектов используем увеличенный размер изображения
             logger.info(f"Текущее устройство: {config.device}")
+            logger.info("Оптимизация для маленьких объектов и высокого угла обзора:")
+            logger.info(f"  - Размер изображения: {config.img_size}x{config.img_size} (увеличен для лучшей детекции)")
+            logger.info(f"  - Модель: {config.model_name} (более крупная модель)")
+            logger.info(f"  - Порог уверенности: {config.conf_threshold} (понижен для маленьких объектов)")
+            
             if config.device == "cpu":
-                epochs = 20
-                batch_size = 8
-                logger.info("Используется CPU: epochs=20, batch_size=8")
+                epochs = 30  # Увеличено для CPU
+                batch_size = 4  # Уменьшено из-за большого размера изображения
+                img_size = 960  # Немного уменьшено для CPU, но все еще больше чем было
+                logger.info(f"Используется CPU: epochs={epochs}, batch_size={batch_size}, img_size={img_size}")
             else:
                 epochs = config.epochs
                 batch_size = config.batch_size
-                logger.info(f"Используется GPU: epochs={epochs}, batch_size={batch_size}")
+                img_size = config.img_size
+                logger.info(f"Используется GPU: epochs={epochs}, batch_size={batch_size}, img_size={img_size}")
             
             logger.info("Запуск обучения...")
-            logger.info(f"Параметры: epochs={epochs}, img_size={config.img_size}, batch_size={batch_size}, patience={config.patience}, workers={config.workers}")
+            logger.info(f"Параметры: epochs={epochs}, img_size={img_size}, batch_size={batch_size}, patience={config.patience}, workers={config.workers}")
             
             train_results = trainer.train(
                 epochs=epochs,
-                img_size=config.img_size,
+                img_size=img_size,  # Используем адаптированный размер
                 batch_size=batch_size,
                 patience=config.patience,
                 workers=config.workers,

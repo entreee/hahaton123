@@ -163,7 +163,7 @@ class PPEDetectorTrainer:
             self.logger.error(f"Ошибка загрузки модели: {e}")
             raise
         
-        # Параметры обучения
+        # Параметры обучения (оптимизированы для маленьких объектов и высокого угла обзора)
         train_params = {
             'data': str(self.config_path),
             'epochs': epochs,
@@ -193,22 +193,28 @@ class PPEDetectorTrainer:
             'kobj': 2.0,
             'label_smoothing': 0.0,
             'nbs': 64,
+            # Augmentation оптимизирована для маленьких объектов
             'hsv_h': 0.015,
             'hsv_s': 0.7,
             'hsv_v': 0.4,
-            'degrees': 0.0,
-            'translate': 0.1,
-            'scale': 0.5,
+            'degrees': 0.0,  # Без поворота для высокого угла обзора
+            'translate': 0.2,  # Увеличено для разнообразия позиций
+            'scale': 0.9,  # Увеличено для обучения на разных масштабах (важно для маленьких объектов)
             'shear': 0.0,
-            'perspective': 0.0,
-            'flipud': 0.0,
-            'fliplr': 0.5,
-            'mosaic': 1.0,
-            'mixup': 0.0,
-            'copy_paste': 0.0,
+            'perspective': 0.0001,  # Минимальная перспектива для высокого угла
+            'flipud': 0.0,  # Без вертикального отражения для высокого угла
+            'fliplr': 0.5,  # Горизонтальное отражение
+            'mosaic': 1.0,  # Mosaic помогает с маленькими объектами
+            'mixup': 0.15,  # Mixup для разнообразия (было 0.0)
+            'copy_paste': 0.3,  # Copy-paste augmentation для маленьких объектов
             'cfg': None,
             'tracker': None,
-            'save_dir': str(experiment_dir)
+            'save_dir': str(experiment_dir),
+            # Дополнительные параметры для маленьких объектов
+            'overlap_mask': True,
+            'mask_ratio': 4,
+            'dropout': 0.0,
+            'val': True,  # Валидация во время обучения
         }
         
         self.logger.info(f"Директория эксперимента: {experiment_dir}")

@@ -157,8 +157,14 @@ def check_data_structure(
     print("\nОБЩАЯ СТАТИСТИКА")
     print("-" * 40)
     print(f"Всего изображений: {stats['total_images']}")
-    print(f"  Train: {stats['train_images']} ({stats['train_images']/stats['total_images']*100:.1f}%)")
-    print(f"  Val: {stats['val_images']} ({stats['val_images']/stats['total_images']*100:.1f}%)")
+    if stats['total_images'] > 0:
+        train_percent = stats['train_images'] / stats['total_images'] * 100
+        val_percent = stats['val_images'] / stats['total_images'] * 100
+        print(f"  Train: {stats['train_images']} ({train_percent:.1f}%)")
+        print(f"  Val: {stats['val_images']} ({val_percent:.1f}%)")
+    else:
+        print(f"  Train: {stats['train_images']} (N/A - нет данных)")
+        print(f"  Val: {stats['val_images']} (N/A - нет данных)")
     
     print(f"Всего аннотаций: {total_annotations}")
     print(f"  Train: {stats['train_labels']} файлов разметки")

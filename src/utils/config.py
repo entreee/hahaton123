@@ -31,16 +31,16 @@ class ProjectConfig:
     classes: Dict[int, str] = None
     class_colors: Dict[int, tuple] = None
     
-    # Модель
-    model_name: str = "yolov8n.pt"
+    # Модель (используем более крупную модель для лучшей детекции маленьких объектов)
+    model_name: str = "yolov8m.pt"  # Medium вместо Nano для лучшей детекции маленьких объектов
     experiment_name: str = "ppe_detection"
-    conf_threshold: float = 0.5
+    conf_threshold: float = 0.25  # Понижен для детекции маленьких объектов
     
-    # Обучение
-    epochs: int = 30
-    img_size: int = 640
-    batch_size: int = 16
-    patience: int = 10
+    # Обучение (оптимизировано для маленьких объектов и высокого угла обзора)
+    epochs: int = 50  # Больше эпох для лучшего обучения
+    img_size: int = 1280  # Увеличен размер для лучшей детекции маленьких объектов (было 640)
+    batch_size: int = 8  # Уменьшен из-за увеличенного размера изображения
+    patience: int = 15  # Больше терпения для сложных случаев
     workers: int = 8
     device: str = "auto"
     

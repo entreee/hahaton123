@@ -28,7 +28,7 @@ CLASS_COLORS = {
     1: (0, 255, 255)     # Желтый для жилета (BGR)
 }
 
-CONFIDENCE_THRESHOLD = 0.5
+CONFIDENCE_THRESHOLD = 0.25  # Понижен для детекции маленьких объектов
 
 
 class PPEDetector:
@@ -100,12 +100,16 @@ class PPEDetector:
         original_image = image.copy()
         height, width = image.shape[:2]
         
-        # Детекция
+        # Детекция (оптимизировано для маленьких объектов)
         results = self.model.predict(
             image_path,
             conf=self.conf_threshold,
             verbose=False,
-            device=self.device
+            device=self.device,
+            imgsz=1280,  # Увеличенный размер для лучшей детекции маленьких объектов
+            iou=0.45,  # Понижен IoU для лучшей детекции перекрывающихся объектов
+            agnostic_nms=False,
+            max_det=300,  # Увеличено максимальное количество детекций
         )
         
         detections = []
@@ -232,12 +236,15 @@ class PPEDetector:
             if not ret:
                 break
             
-            # Детекция на кадре
+            # Детекция на кадре (оптимизировано для маленьких объектов)
             results = self.model.predict(
                 frame,
                 conf=conf_threshold,
                 verbose=False,
-                device=self.device
+                device=self.device,
+                imgsz=1280,  # Увеличенный размер для лучшей детекции маленьких объектов
+                iou=0.45,
+                max_det=300,
             )
             
             # Рисуем детекции (используем тот же код, что и для изображений)
@@ -343,12 +350,15 @@ class PPEDetector:
             if max_frames and frame_count >= max_frames:
                 break
             
-            # Детекция
+            # Детекция (оптимизировано для маленьких объектов)
             results = self.model.predict(
                 frame,
                 conf=conf_threshold,
                 verbose=False,
-                device=self.device
+                device=self.device,
+                imgsz=1280,  # Увеличенный размер для лучшей детекции маленьких объектов
+                iou=0.45,
+                max_det=300,
             )
             
             # Рисуем детекции

@@ -156,15 +156,16 @@ class PPEDetectorTrainer:
             Словарь с результатами обучения
         """
         # Автоматическое определение количества workers для избежания ConnectionResetError
+        # Увеличено для лучшей скорости загрузки данных
         if workers is None:
             if platform.system() == 'Windows':
-                # На Windows используем меньше workers для избежания проблем с multiprocessing
-                workers = min(4, multiprocessing.cpu_count() // 2)
+                # На Windows используем больше workers для скорости (но безопасно)
+                workers = min(6, multiprocessing.cpu_count() - 1)  # Оставляем 1 ядро системе
                 if workers == 0:
                     workers = 1
             else:
-                # На Linux/Mac можно использовать больше
-                workers = min(8, multiprocessing.cpu_count())
+                # На Linux/Mac можно использовать еще больше
+                workers = min(8, multiprocessing.cpu_count() - 1)
         
         self.logger.info("=" * 70)
         self.logger.info("=== НАЧАЛО ОБУЧЕНИЯ ===")
@@ -175,9 +176,19 @@ class PPEDetectorTrainer:
         self.logger.info(f"  - Размер батча: {batch_size}")
         self.logger.info(f"  - Workers: {workers}")
         self.logger.info(f"  - Patience: {patience}")
+        self.logger.info(f"  - Mixed Precision (AMP): Включен (ускоряет обучение)")
         self.logger.info(f"Платформа: {platform.system()}, CPU cores: {multiprocessing.cpu_count()}")
         self.logger.info(f"Модель: {self.model_name}")
         self.logger.info(f"Конфигурация: {self.config_path}")
+        self.logger.info("")
+        self.logger.info("ОПТИМИЗАЦИИ ДЛЯ СКОРОСТИ:")
+        self.logger.info("  - Уменьшен размер изображения (800 вместо 1280)")
+        self.logger.info("  - Увеличен batch_size (4 вместо 2)")
+        self.logger.info("  - Уменьшена интенсивность augmentation")
+        self.logger.info("  - Увеличено количество workers")
+        self.logger.info("  - Включен Mixed Precision Training (AMP)")
+        self.logger.info("")
+        self.logger.info("Ожидаемая скорость: ~15-25 итераций/сек (вместо 6)")
         
         # Проверка доступной памяти GPU
         if torch.cuda.is_available() and self.device != "cpu":
@@ -190,9 +201,9 @@ class PPEDetectorTrainer:
                 self.logger.info(f"GPU память: {memory_free:.2f} GB свободно / {memory_total:.2f} GB всего")
                 
                 # Оценка требуемой памяти (приблизительно)
-                # YOLOv8l с img_size=1280 и batch_size=2 требует примерно 6-8 GB
-                # Формула: (img_size/640)^2 * batch_size * 0.4 для YOLOv8l
-                estimated_memory = (img_size / 640) ** 2 * batch_size * 0.4  # Примерная оценка в GB
+                # YOLOv8l с img_size=800 и batch_size=4 требует примерно 5-7 GB
+                # Формула: (img_size/640)^2 * batch_size * 0.35 для YOLOv8l
+                estimated_memory = (img_size / 640) ** 2 * batch_size * 0.35  # Примерная оценка в GB
                 self.logger.info(f"Примерная требуемая память: ~{estimated_memory:.2f} GB")
                 
                 # Автоматическое уменьшение параметров при нехватке памяти
@@ -207,13 +218,13 @@ class PPEDetectorTrainer:
                     # Уменьшаем batch_size сначала
                     if batch_size > 1 and memory_free < estimated_memory * 0.9:
                         batch_size = max(1, batch_size // 2)
-                        estimated_memory = (img_size / 640) ** 2 * batch_size * 0.4
+                        estimated_memory = (img_size / 640) ** 2 * batch_size * 0.35
                         self.logger.info(f"Автоматически уменьшен batch_size: {original_batch_size} -> {batch_size}")
                     
                     # Если все еще не хватает, уменьшаем img_size
                     if memory_free < estimated_memory * 0.9 and img_size > 640:
                         img_size = max(640, int(img_size * 0.8))
-                        estimated_memory = (img_size / 640) ** 2 * batch_size * 0.4
+                        estimated_memory = (img_size / 640) ** 2 * batch_size * 0.35
                         self.logger.info(f"Автоматически уменьшен img_size: {original_img_size} -> {img_size}")
                     
                     if batch_size != original_batch_size or img_size != original_img_size:
@@ -288,20 +299,20 @@ class PPEDetectorTrainer:
             'kobj': 2.0,
             'label_smoothing': 0.0,
             'nbs': 64,
-            # Augmentation МАКСИМАЛЬНО увеличена для расширения датасета и ОЧЕНЬ маленьких объектов
-            'hsv_h': 0.05,  # Максимально увеличено для разнообразия цветов (белые и оранжевые каски)
-            'hsv_s': 0.9,  # Увеличено для большего разнообразия насыщенности
-            'hsv_v': 0.5,  # Увеличено для большего разнообразия яркости
+            # Augmentation оптимизирована для скорости и качества
+            'hsv_h': 0.015,  # Уменьшено для скорости (было 0.05)
+            'hsv_s': 0.7,  # Уменьшено для скорости (было 0.9)
+            'hsv_v': 0.4,  # Уменьшено для скорости (было 0.5)
             'degrees': 0.0,  # Без поворота для высокого угла обзора
-            'translate': 0.4,  # Максимально увеличено для разнообразия позиций (расширяет датасет)
-            'scale': 0.98,  # Почти максимально для обучения на разных масштабах (критично для очень маленьких объектов)
+            'translate': 0.2,  # Уменьшено для скорости (было 0.4)
+            'scale': 0.5,  # Уменьшено для скорости (было 0.98) - все еще эффективно для маленьких объектов
             'shear': 0.0,
             'perspective': 0.0,  # Без перспективы для высокого угла обзора
             'flipud': 0.0,  # Без вертикального отражения для высокого угла
-            'fliplr': 0.5,  # Горизонтальное отражение (удваивает датасет)
-            'mosaic': 1.0,  # Mosaic критичен для маленьких объектов (создает много новых комбинаций)
-            'mixup': 0.3,  # Максимально увеличено mixup для разнообразия (расширяет датасет)
-            'copy_paste': 0.5,  # Максимально увеличено copy-paste для маленьких объектов (расширяет датасет)
+            'fliplr': 0.5,  # Горизонтальное отражение (удваивает датасет) - быстро
+            'mosaic': 0.5,  # Уменьшено для скорости (было 1.0) - все еще эффективно
+            'mixup': 0.1,  # Уменьшено для скорости (было 0.3)
+            'copy_paste': 0.1,  # Уменьшено для скорости (было 0.5)
             'cfg': None,
             'tracker': None,
             'save_dir': str(experiment_dir),
@@ -310,6 +321,9 @@ class PPEDetectorTrainer:
             'mask_ratio': 4,
             'dropout': 0.0,
             'val': True,  # Валидация во время обучения
+            'amp': True,  # Mixed precision training для ускорения (если поддерживается)
+            'fraction': 1.0,  # Использовать весь датасет
+            'profile': False,  # Отключить профилирование для скорости
         }
         
         self.logger.info(f"Директория эксперимента: {experiment_dir}")

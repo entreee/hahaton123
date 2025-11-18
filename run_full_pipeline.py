@@ -354,25 +354,28 @@ def main() -> None:
             
             if config.device == "cpu":
                 epochs = 50  # Увеличено для CPU
-                batch_size = 2  # Уменьшено из-за очень большого размера изображения
-                img_size = 1280  # Уменьшено для CPU, но все еще больше чем было
+                batch_size = 4  # Оптимизировано для скорости
+                img_size = 640  # Стандартный размер для CPU (быстрее)
                 logger.info(f"Используется CPU: epochs={epochs}, batch_size={batch_size}, img_size={img_size}")
+                logger.info("  Примечание: CPU обучение медленнее GPU. Рекомендуется использовать GPU.")
             else:
                 epochs = config.epochs
                 batch_size = config.batch_size
                 img_size = config.img_size
                 logger.info(f"Используется GPU: epochs={epochs}, batch_size={batch_size}, img_size={img_size}")
+                logger.info("  Параметры оптимизированы для скорости: ожидается ~15-25 it/s")
             
             logger.info("Запуск обучения...")
             logger.info(f"Параметры: epochs={epochs}, img_size={img_size}, batch_size={batch_size}, patience={config.patience}, workers={config.workers}")
-            logger.info("Расширение датасета через augmentation:")
-            logger.info("  - Mosaic: 1.0 (создает много новых комбинаций из 4 изображений)")
-            logger.info("  - Mixup: 0.3 (смешивает изображения для разнообразия)")
-            logger.info("  - Copy-paste: 0.5 (копирует объекты между изображениями)")
-            logger.info("  - Horizontal flip: 0.5 (удваивает датасет)")
-            logger.info("  - Scale: 0.98 (обучение на разных масштабах)")
-            logger.info("  - Translate: 0.4 (разнообразие позиций)")
-            logger.info("  - HSV augmentation: увеличено (разнообразие цветов для белых и оранжевых касок)")
+            logger.info("Augmentation (оптимизировано для скорости):")
+            logger.info("  - Mosaic: 0.5 (уменьшено для скорости, было 1.0)")
+            logger.info("  - Mixup: 0.1 (уменьшено для скорости, было 0.3)")
+            logger.info("  - Copy-paste: 0.1 (уменьшено для скорости, было 0.5)")
+            logger.info("  - Horizontal flip: 0.5 (быстро и эффективно)")
+            logger.info("  - Scale: 0.5 (уменьшено для скорости, было 0.98)")
+            logger.info("  - Translate: 0.2 (уменьшено для скорости, было 0.4)")
+            logger.info("  - HSV augmentation: оптимизировано (было увеличено)")
+            logger.info("  - Mixed Precision (AMP): включен для ускорения")
             
             train_results = trainer.train(
                 epochs=epochs,

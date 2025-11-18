@@ -166,9 +166,18 @@ class PPEDetectorTrainer:
                 # На Linux/Mac можно использовать больше
                 workers = min(8, multiprocessing.cpu_count())
         
+        self.logger.info("=" * 70)
         self.logger.info("=== НАЧАЛО ОБУЧЕНИЯ ===")
-        self.logger.info(f"Параметры: epochs={epochs}, img_size={img_size}, batch={batch_size}, workers={workers}")
+        self.logger.info("=" * 70)
+        self.logger.info(f"Параметры обучения:")
+        self.logger.info(f"  - Эпохи: {epochs}")
+        self.logger.info(f"  - Размер изображения: {img_size}x{img_size}")
+        self.logger.info(f"  - Размер батча: {batch_size}")
+        self.logger.info(f"  - Workers: {workers}")
+        self.logger.info(f"  - Patience: {patience}")
         self.logger.info(f"Платформа: {platform.system()}, CPU cores: {multiprocessing.cpu_count()}")
+        self.logger.info(f"Модель: {self.model_name}")
+        self.logger.info(f"Конфигурация: {self.config_path}")
         
         # Проверка доступной памяти GPU
         if torch.cuda.is_available() and self.device != "cpu":
@@ -218,14 +227,34 @@ class PPEDetectorTrainer:
         experiment_dir.mkdir(parents=True, exist_ok=True)
         
         # Загружаем модель (ленивый импорт YOLO)
-        self.logger.info(f"Импорт YOLO...")
-        from ultralytics import YOLO
+        self.logger.info("Импорт библиотеки YOLO...")
+        try:
+            from ultralytics import YOLO
+            self.logger.info("YOLO успешно импортирован")
+        except ImportError as e:
+            self.logger.error(f"Не удалось импортировать YOLO: {e}")
+            self.logger.error("Установите ultralytics: pip install ultralytics")
+            raise
+        except Exception as e:
+            self.logger.error(f"Ошибка при импорте YOLO: {e}")
+            raise
+        
         self.logger.info(f"Загрузка модели: {self.model_name}")
         try:
             model = YOLO(self.model_name)
-            self.logger.info("Модель успешно загружена")
+            self.logger.info("✓ Модель успешно загружена")
+            
+            # Информация о модели
+            if hasattr(model, 'names'):
+                self.logger.info(f"  Классы: {list(model.names.values())}")
+        except FileNotFoundError:
+            self.logger.error(f"Файл модели не найден: {self.model_name}")
+            self.logger.error("Убедитесь, что файл существует или используйте предобученную модель (yolov8n.pt, yolov8s.pt, и т.д.)")
+            raise
         except Exception as e:
             self.logger.error(f"Ошибка загрузки модели: {e}")
+            import traceback
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
             raise
         
         # Параметры обучения (оптимизированы для маленьких объектов и высокого угла обзора)
@@ -292,10 +321,15 @@ class PPEDetectorTrainer:
         
         # Запуск обучения с обработкой ошибок multiprocessing и CUDA OOM
         try:
-            self.logger.info("Запуск обучения...")
+            self.logger.info("=" * 70)
+            self.logger.info("ЗАПУСК ОБУЧЕНИЯ...")
+            self.logger.info("=" * 70)
+            self.logger.info("Это может занять значительное время. Пожалуйста, подождите...")
             results = model.train(**train_params)
             
-            self.logger.info("Обучение успешно завершено!")
+            self.logger.info("=" * 70)
+            self.logger.info("✓ ОБУЧЕНИЕ УСПЕШНО ЗАВЕРШЕНО!")
+            self.logger.info("=" * 70)
             
             # Статистика результатов
             best_model = experiment_dir / "weights" / "best.pt"
@@ -308,13 +342,24 @@ class PPEDetectorTrainer:
             final_metrics = None
             results_csv = experiment_dir / "results.csv"
             if results_csv.exists():
-                import pandas as pd
-                df = pd.read_csv(results_csv)
-                final_metrics = df.iloc[-1]
-                self.logger.info(
-                    f"Финальные метрики: mAP50={final_metrics.get('metrics/mAP50(B)', 'N/A'):.3f}, "
-                    f"mAP50-95={final_metrics.get('metrics/mAP50-95(B)', 'N/A'):.3f}"
-                )
+                try:
+                    import pandas as pd
+                    df = pd.read_csv(results_csv)
+                    if len(df) > 0:
+                        final_metrics = df.iloc[-1]
+                        map50 = final_metrics.get('metrics/mAP50(B)', 'N/A')
+                        map50_95 = final_metrics.get('metrics/mAP50-95(B)', 'N/A')
+                        self.logger.info("=" * 50)
+                        self.logger.info("ФИНАЛЬНЫЕ МЕТРИКИ ОБУЧЕНИЯ:")
+                        self.logger.info(f"  mAP50: {map50:.3f}" if isinstance(map50, (int, float)) else f"  mAP50: {map50}")
+                        self.logger.info(f"  mAP50-95: {map50_95:.3f}" if isinstance(map50_95, (int, float)) else f"  mAP50-95: {map50_95}")
+                        self.logger.info("=" * 50)
+                    else:
+                        self.logger.warning("Файл results.csv пуст")
+                except Exception as e:
+                    self.logger.warning(f"Не удалось прочитать метрики из results.csv: {e}")
+            else:
+                self.logger.warning(f"Файл метрик не найден: {results_csv}")
             
             return {
                 'success': True,
@@ -331,7 +376,7 @@ class PPEDetectorTrainer:
         except RuntimeError as e:
             # Обработка CUDA out of memory
             error_str = str(e).lower()
-            if 'out of memory' in error_str or 'cuda' in error_str:
+            if 'out of memory' in error_str or ('cuda' in error_str and 'memory' in error_str):
                 self.logger.warning(f"CUDA out of memory: {e}")
                 
                 # Очистка памяти
@@ -443,8 +488,12 @@ class PPEDetectorTrainer:
                 # Другие RuntimeError - пробрасываем дальше к обработке multiprocessing
                 raise
         except (ConnectionResetError, RuntimeError) as e:
-            # Обработка ошибок multiprocessing (ConnectionResetError, RuntimeError)
+            # Обработка ошибок multiprocessing (только если это не CUDA OOM)
             error_str = str(e).lower()
+            # Пропускаем CUDA OOM - они уже обработаны выше
+            if 'out of memory' in error_str or ('cuda' in error_str and 'memory' in error_str):
+                raise  # Пробрасываем дальше, так как уже обработали
+            
             if 'connection' in error_str or 'multiprocessing' in error_str or 'resource_sharer' in error_str:
                 self.logger.warning(f"Ошибка multiprocessing: {e}")
                 self.logger.info("Попытка перезапуска с workers=0 (без multiprocessing)...")
@@ -466,13 +515,20 @@ class PPEDetectorTrainer:
                     final_metrics = None
                     results_csv = experiment_dir / "results.csv"
                     if results_csv.exists():
-                        import pandas as pd
-                        df = pd.read_csv(results_csv)
-                        final_metrics = df.iloc[-1]
-                        self.logger.info(
-                            f"Финальные метрики: mAP50={final_metrics.get('metrics/mAP50(B)', 'N/A'):.3f}, "
-                            f"mAP50-95={final_metrics.get('metrics/mAP50-95(B)', 'N/A'):.3f}"
-                        )
+                        try:
+                            import pandas as pd
+                            df = pd.read_csv(results_csv)
+                            if len(df) > 0:
+                                final_metrics = df.iloc[-1]
+                                map50 = final_metrics.get('metrics/mAP50(B)', 'N/A')
+                                map50_95 = final_metrics.get('metrics/mAP50-95(B)', 'N/A')
+                                self.logger.info("=" * 50)
+                                self.logger.info("ФИНАЛЬНЫЕ МЕТРИКИ ОБУЧЕНИЯ (workers=0):")
+                                self.logger.info(f"  mAP50: {map50:.3f}" if isinstance(map50, (int, float)) else f"  mAP50: {map50}")
+                                self.logger.info(f"  mAP50-95: {map50_95:.3f}" if isinstance(map50_95, (int, float)) else f"  mAP50-95: {map50_95}")
+                                self.logger.info("=" * 50)
+                        except Exception as e:
+                            self.logger.warning(f"Не удалось прочитать метрики: {e}")
                     
                     return {
                         'success': True,

@@ -415,16 +415,29 @@ def main() -> None:
                     logger.warning("Нет изображений в data/images/val/ для теста.")
                 else:
                     test_img = val_images[0]
-                    logger.info(f"Тестируем на: {test_img}")
-                    detector = PPEDetector(str(best_model_path))
+                    logger.info(f"Тестовое изображение: {test_img.name}")
+                    logger.info("Инициализация детектора...")
                     try:
+                        detector = PPEDetector(str(best_model_path))
+                        logger.info("Детектор успешно загружен")
+                        
+                        logger.info("Выполнение детекции...")
                         result_img, detections = detector.detect_image(str(test_img), save_result=True)
-                        logger.info(f"Найдено детекций: {len(detections)}")
-                        for det in detections:
-                            logger.info(f"  - {det['class_name']}: {det['confidence']:.2f}")
+                        
+                        logger.info("=" * 50)
+                        logger.info("РЕЗУЛЬТАТЫ ТЕСТОВОЙ ДЕТЕКЦИИ:")
+                        logger.info(f"  Найдено детекций: {len(detections)}")
+                        if detections:
+                            for i, det in enumerate(detections, 1):
+                                logger.info(f"  [{i}] {det['class_name']}: уверенность {det['confidence']:.3f}")
+                        else:
+                            logger.warning("  Детекции не найдены")
+                        logger.info("=" * 50)
                         logger.info("Результат детекции сохранен в папке 'output/detections/'.")
+                    except FileNotFoundError as e:
+                        logger.error(f"Файл модели не найден: {e}")
                     except Exception as e:
-                        logger.warning(f"Ошибка при тестовом инференсе: {e}", exc_info=True)
+                        logger.error(f"Ошибка при тестовом инференсе: {e}", exc_info=True)
         except Exception as e:
             logger.error(f"Ошибка при тестировании модели: {e}", exc_info=True)
             logger.warning("Продолжаем...")

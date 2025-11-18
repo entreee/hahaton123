@@ -42,22 +42,33 @@ def check_data_structure(
     for dir_path in required_dirs:
         full_path = data_path / dir_path
         if full_path.exists():
-            # Подсчет изображений
-            img_count = len(list(full_path.glob("*.jpg"))) + \
-                       len(list(full_path.glob("*.png"))) + \
-                       len(list(full_path.glob("*.jpeg")))
+            # Подсчет изображений (только для папок images)
+            img_count = 0
+            if "images" in dir_path:
+                img_count = len(list(full_path.glob("*.jpg"))) + \
+                           len(list(full_path.glob("*.png"))) + \
+                           len(list(full_path.glob("*.jpeg"))) + \
+                           len(list(full_path.glob("*.JPG"))) + \
+                           len(list(full_path.glob("*.PNG"))) + \
+                           len(list(full_path.glob("*.JPEG")))
             
-            # Подсчет разметки (только для labels)
+            # Подсчет разметки (только для папок labels)
             label_count = 0
             if "labels" in dir_path:
-                label_count = len(list(full_path.glob("*.txt")))
+                label_count = len(list(full_path.glob("*.txt"))) + \
+                             len(list(full_path.glob("*.TXT")))
             
+            # Устанавливаем значения только для соответствующих типов (не перезаписываем)
             if "train" in dir_path:
-                stats['train_images'] = img_count if "images" in dir_path else 0
-                stats['train_labels'] = label_count if "labels" in dir_path else 0
-            else:
-                stats['val_images'] = img_count if "images" in dir_path else 0
-                stats['val_labels'] = label_count if "labels" in dir_path else 0
+                if "images" in dir_path:
+                    stats['train_images'] = img_count
+                if "labels" in dir_path:
+                    stats['train_labels'] = label_count
+            else:  # val
+                if "images" in dir_path:
+                    stats['val_images'] = img_count
+                if "labels" in dir_path:
+                    stats['val_labels'] = label_count
             
             status = "OK" if (img_count > 0 or label_count > 0) else "EMPTY"
             print(f"{status} {dir_path}: {img_count} изображений, {label_count} разметок")
@@ -71,19 +82,33 @@ def check_data_structure(
     print("\nПРОВЕРКА СООТВЕТСТВИЯ ФАЙЛОВ")
     print("-" * 40)
     
-    # Train
+    # Train - проверка соответствия файлов (все расширения изображений)
     train_missing_labels = 0
     train_extra_labels = 0
     
-    for img_file in (data_path / "images/train").glob("*.jpg"):
-        label_file = (data_path / "labels/train") / f"{img_file.stem}.txt"
-        if not label_file.exists():
-            train_missing_labels += 1
+    train_images_dir = data_path / "images/train"
+    train_labels_dir = data_path / "labels/train"
     
-    for label_file in (data_path / "labels/train").glob("*.txt"):
-        img_file = (data_path / "images/train") / f"{label_file.stem}.jpg"
-        if not img_file.exists():
-            train_extra_labels += 1
+    # Проверяем только если папки существуют
+    if train_images_dir.exists() and train_labels_dir.exists():
+        # Проверяем все расширения изображений
+        image_extensions = ['*.jpg', '*.jpeg', '*.png', '*.bmp', '*.JPG', '*.JPEG', '*.PNG', '*.BMP']
+        for ext in image_extensions:
+            for img_file in train_images_dir.glob(ext):
+                label_file = train_labels_dir / f"{img_file.stem}.txt"
+                if not label_file.exists():
+                    train_missing_labels += 1
+        
+        # Проверяем разметки без изображений (проверяем все возможные расширения)
+        for label_file in train_labels_dir.glob("*.txt"):
+            img_found = False
+            for ext in image_extensions:
+                img_file = train_images_dir / f"{label_file.stem}{ext[1:]}"  # убираем *
+                if img_file.exists():
+                    img_found = True
+                    break
+            if not img_found:
+                train_extra_labels += 1
     
     stats['missing_labels'] = train_missing_labels
     stats['extra_labels'] = train_extra_labels

@@ -263,12 +263,26 @@ def main() -> None:
             class_distribution = dataset_stats.get("class_distribution", {})
             
             logger.info(f"Всего изображений: {total_images}")
+            logger.info(f"  Train: {data_ok.get('train_images', 0)} изображений, {data_ok.get('train_labels', 0)} разметок")
+            logger.info(f"  Val: {data_ok.get('val_images', 0)} изображений, {data_ok.get('val_labels', 0)} разметок")
             logger.info(f"Распределение классов (train): {class_distribution}")
             
             if total_images == 0:
                 logger.error("Не найдено данных для обучения (нет изображений в data/images/train/ и data/images/val/).")
                 logger.error("Загрузите данные (или извлеките кадры из видео) и запустите скрипт снова.")
                 return
+            
+            # Проверяем наличие разметки
+            train_images = data_ok.get('train_images', 0)
+            train_labels = data_ok.get('train_labels', 0)
+            missing_labels = data_ok.get('missing_labels', 0)
+            
+            if train_images > 0 and train_labels == 0:
+                logger.warning(f"Найдено {train_images} изображений, но нет разметки!")
+                logger.warning("Запустите автоматическую предразметку или разметьте данные вручную.")
+            elif missing_labels > 0:
+                logger.warning(f"Найдено {missing_labels} изображений без разметки.")
+                logger.info("Можно продолжить обучение с имеющимися данными или доразметить недостающие изображения.")
         except Exception as e:
             logger.error(f"Ошибка при проверке данных: {e}", exc_info=True)
             raise

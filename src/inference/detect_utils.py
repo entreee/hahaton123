@@ -9,12 +9,10 @@
 """
 
 import cv2
-from ultralytics import YOLO
 from pathlib import Path
 import numpy as np
 from typing import List, Tuple, Optional, Dict
-import matplotlib.pyplot as plt
-from matplotlib.patches import Rectangle
+# YOLO и matplotlib импортируются лениво (только когда нужны) для ускорения импорта модуля
 
 
 # Настройки отображения
@@ -55,6 +53,9 @@ class PPEDetector:
         
         if not self.model_path.exists():
             raise FileNotFoundError(f"Модель не найдена: {model_path}")
+        
+        # Ленивый импорт YOLO (только при инициализации детектора)
+        from ultralytics import YOLO
         
         # Загрузка модели
         self.model = YOLO(str(model_path))
@@ -513,6 +514,7 @@ class PPEDetector:
             Словарь с информацией о модели
         """
         try:
+            from ultralytics import YOLO
             model = YOLO(self.model_path)
             info = {
                 'model_path': str(self.model_path),
@@ -546,7 +548,7 @@ def visualize_detections(
     class_names: Dict = CLASS_NAMES,
     class_colors: Dict = CLASS_COLORS,
     figsize: Tuple[float, float] = (12, 8)
-) -> plt.Figure:
+):
     """
     Визуализирует детекции на изображении с помощью matplotlib.
     
@@ -560,6 +562,10 @@ def visualize_detections(
     Returns:
         Matplotlib фигура
     """
+    # Ленивый импорт matplotlib (только когда функция вызывается)
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import Rectangle
+    
     fig, ax = plt.subplots(1, 1, figsize=figsize)
     
     # Конвертация BGR -> RGB если нужно
@@ -614,6 +620,7 @@ def visualize_detections(
 if __name__ == "__main__":
     # Пример использования
     from pathlib import Path
+    import matplotlib.pyplot as plt  # Импорт для plt.show()
     
     # Инициализация
     detector = PPEDetector("models/ppe_model/weights/best.pt")

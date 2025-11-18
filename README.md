@@ -28,14 +28,17 @@ data/
 ### 3. Запуск полного цикла обучения
 
 ```bash
-python run_training.py
+python run_full_pipeline.py
 ```
 
 Этот скрипт автоматически:
+- Создаст структуру проекта и конфигурацию
+- Извлечет кадры из видео (если есть в папке `videos/`)
+- Сделает автоматическую предразметку
+- Разделит датасет на train/val
 - Проверит структуру данных
-- Разделит датасет на train/val (если нужно)
-- Запустит обучение модели
-- Сохранит лучшую модель
+- Обучит модель YOLOv8
+- Выполнит быстрый тест модели
 
 ## Подробная инструкция по разметке данных
 
@@ -172,31 +175,41 @@ data/
 
 ### Автоматическое разделение на train/val
 
-Если все изображения в `data/images/train/` и разметка в `data/labels/train/`, запустите:
+Разделение выполняется автоматически в `run_full_pipeline.py`. Если нужно разделить вручную, используйте ноутбук `notebooks/data_preparation.ipynb` или импортируйте функцию:
 
-```bash
-python split_dataset.py --ratio 0.2
+```python
+from src.data.split_dataset import split_dataset
+split_dataset(
+    train_images_dir="data/images/train",
+    train_labels_dir="data/labels/train",
+    val_ratio=0.2
+)
 ```
-
-Это автоматически переместит 20% данных в валидационную выборку.
 
 ## Обучение модели
 
-### Полный цикл обучения
+### Полный цикл обучения (рекомендуется)
 
 ```bash
-python run_training.py
+python run_full_pipeline.py
 ```
 
-### Ручной запуск
+### Ручной запуск через ноутбук
 
-1. Проверьте конфигурацию: `config/ppe_data.yaml`
-2. Запустите обучение:
-```bash
-python train.py
+1. Откройте Jupyter: `jupyter lab`
+2. Запустите ноутбук `notebooks/training.ipynb`
+3. Модель будет обучена и сохранена в `models/ppe_detection/weights/best.pt`
+
+### Ручной запуск через Python
+
+```python
+from src.models.train_model import PPEDetectorTrainer
+
+trainer = PPEDetectorTrainer()
+results = trainer.train(epochs=30, batch_size=16)
 ```
 
-Модель будет обучена и сохранена в `models/ppe_model/weights/best.pt`
+Модель будет обучена и сохранена в `models/ppe_detection/weights/best.pt`
 
 ### Параметры обучения
 
@@ -210,12 +223,25 @@ python train.py
 
 После обучения модель можно использовать для детекции:
 
-```bash
+### Через ноутбук (рекомендуется)
+
+1. Откройте `notebooks/inference.ipynb`
+2. Загрузите модель и протестируйте на изображениях/видео/камере
+
+### Через Python
+
+```python
+from src.inference.detect_utils import PPEDetector
+
+# Детекция на изображении
+detector = PPEDetector("models/ppe_detection/weights/best.pt")
+result_img, detections = detector.detect_image("test.jpg", save_result=True)
+
 # Детекция на видео
-python detect_video.py --video input.mp4 --model models/ppe_model/weights/best.pt
+detector.detect_video("input.mp4", output_path="output/detected.mp4")
 
 # Детекция с камеры
-python detect_camera.py --model models/ppe_model/weights/best.pt
+detector.detect_camera(camera_id=0)
 ```
 
 ## Требования
@@ -240,14 +266,21 @@ hahaton123/
 │       ├── train/
 │       └── val/
 ├── models/
-│   └── ppe_model/             # Обученные модели
+│   └── ppe_detection/          # Обученные модели
 ├── output/                     # Результаты детекции
-├── run_training.py             # Скрипт полного цикла обучения
-├── train.py                    # Скрипт обучения
-├── split_dataset.py            # Разделение датасета
-├── detect_video.py             # Детекция на видео
-├── detect_camera.py            # Детекция с камеры
+├── notebooks/                   # Jupyter ноутбуки
+│   ├── data_preparation.ipynb  # Подготовка данных
+│   ├── training.ipynb          # Обучение модели
+│   ├── inference.ipynb         # Инференс
+│   └── project_structure.ipynb # Структура проекта
+├── src/                        # Исходный код
+│   ├── data/                   # Модули для работы с данными
+│   ├── models/                 # Модули для обучения
+│   ├── inference/              # Модули для инференса
+│   └── utils/                  # Утилиты
+├── run_full_pipeline.py        # Полный автоматический пайплайн
 ├── requirements.txt            # Зависимости
-└── README.md                   # Документация
+├── README.md                   # Документация
+└── ANNOTATION_GUIDE.md         # Руководство по разметке
 
 ```

@@ -7,12 +7,12 @@ trainer = PPEDetectorTrainer()
 trainer.train(epochs=30, batch_size=16)
 """
 
-from ultralytics import YOLO
 from pathlib import Path
 import torch
 import logging
 from typing import Optional, Dict, List
 from datetime import datetime
+# YOLO импортируется лениво внутри методов, чтобы не замедлять импорт модуля
 
 
 class PPEDetectorTrainer:
@@ -152,7 +152,9 @@ class PPEDetectorTrainer:
         experiment_dir = self.project_dir / self.experiment_name
         experiment_dir.mkdir(parents=True, exist_ok=True)
         
-        # Загружаем модель
+        # Загружаем модель (ленивый импорт YOLO)
+        self.logger.info(f"Импорт YOLO...")
+        from ultralytics import YOLO
         self.logger.info(f"Загрузка модели: {self.model_name}")
         try:
             model = YOLO(self.model_name)
@@ -281,6 +283,7 @@ class PPEDetectorTrainer:
         self.logger.info(f"Валидация модели: {model_path}")
         
         try:
+            from ultralytics import YOLO
             model = YOLO(model_path)
             results = model.val(
                 data=data_path,
@@ -329,6 +332,7 @@ class PPEDetectorTrainer:
             model_path = self.project_dir / self.experiment_name / "weights" / "best.pt"
         
         try:
+            from ultralytics import YOLO
             model = YOLO(model_path)
             results = model.predict(
                 image_path,

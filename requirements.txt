@@ -1,0 +1,11 @@
+# Основные библиотеки для YOLOv8 и компьютерного зрения
+torch>=2.0.0
+torchvision>=0.15.0
+ultralytics>=8.0.0
+opencv-python>=4.8.0
+numpy>=1.24.0
+pillow>=10.0.0
+matplotlib>=3.7.0
+PyYAML>=6.0
+tqdm>=4.65.0
+

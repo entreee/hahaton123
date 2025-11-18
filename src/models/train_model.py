@@ -181,13 +181,35 @@ class PPEDetectorTrainer:
                 self.logger.info(f"GPU память: {memory_free:.2f} GB свободно / {memory_total:.2f} GB всего")
                 
                 # Оценка требуемой памяти (приблизительно)
-                # YOLOv8l с img_size=1600 и batch_size=4 требует примерно 8-12 GB
-                estimated_memory = (img_size / 640) ** 2 * batch_size * 0.5  # Примерная оценка в GB
+                # YOLOv8l с img_size=1280 и batch_size=2 требует примерно 6-8 GB
+                # Формула: (img_size/640)^2 * batch_size * 0.4 для YOLOv8l
+                estimated_memory = (img_size / 640) ** 2 * batch_size * 0.4  # Примерная оценка в GB
                 self.logger.info(f"Примерная требуемая память: ~{estimated_memory:.2f} GB")
                 
-                if memory_free < estimated_memory * 0.8:
+                # Автоматическое уменьшение параметров при нехватке памяти
+                if memory_free < estimated_memory * 0.9:
                     self.logger.warning(f"Внимание: свободной памяти ({memory_free:.2f} GB) может не хватить!")
-                    self.logger.warning(f"Рекомендуется уменьшить batch_size или img_size")
+                    self.logger.warning(f"Требуется: ~{estimated_memory:.2f} GB")
+                    
+                    # Автоматическая корректировка параметров
+                    original_batch_size = batch_size
+                    original_img_size = img_size
+                    
+                    # Уменьшаем batch_size сначала
+                    if batch_size > 1 and memory_free < estimated_memory * 0.9:
+                        batch_size = max(1, batch_size // 2)
+                        estimated_memory = (img_size / 640) ** 2 * batch_size * 0.4
+                        self.logger.info(f"Автоматически уменьшен batch_size: {original_batch_size} -> {batch_size}")
+                    
+                    # Если все еще не хватает, уменьшаем img_size
+                    if memory_free < estimated_memory * 0.9 and img_size > 640:
+                        img_size = max(640, int(img_size * 0.8))
+                        estimated_memory = (img_size / 640) ** 2 * batch_size * 0.4
+                        self.logger.info(f"Автоматически уменьшен img_size: {original_img_size} -> {img_size}")
+                    
+                    if batch_size != original_batch_size or img_size != original_img_size:
+                        self.logger.info(f"Скорректированные параметры: batch_size={batch_size}, img_size={img_size}")
+                        self.logger.info(f"Новая оценка памяти: ~{estimated_memory:.2f} GB")
             except Exception as e:
                 self.logger.warning(f"Не удалось проверить память GPU: {e}")
         
@@ -207,14 +229,15 @@ class PPEDetectorTrainer:
             raise
         
         # Параметры обучения (оптимизированы для маленьких объектов и высокого угла обзора)
+        # Используем скорректированные параметры (если были изменены автоматически)
         train_params = {
             'data': str(self.config_path),
             'epochs': epochs,
-            'imgsz': img_size,
+            'imgsz': img_size,  # Может быть автоматически уменьшен
             'device': self.device,
             'project': str(self.project_dir),
             'name': self.experiment_name,
-            'batch': batch_size,
+            'batch': batch_size,  # Может быть автоматически уменьшен
             'patience': patience,
             'workers': workers,
             'save': save,

@@ -3,12 +3,18 @@
 
 Что делает этот скрипт:
 - создает структуру проекта и конфигурацию (если их ещё нет);
-- извлекает кадры из всех видео в папке `videos/` (если видео есть);
-- делает автоматическую предразметку людей на кадрах;
-- делит данные на train/val;
-- проверяет корректность структуры и разметки;
+- проверяет корректность структуры данных и разметки;
 - обучает модель YOLOv8 с подобранными параметрами;
 - выполняет быстрый тест модели на одном изображении из валидации.
+
+ВАЖНО: Перед запуском pipeline необходимо:
+1. Извлечь кадры из видео: python extract.py
+2. Разметить кадры вручную (используя LabelImg или другой инструмент)
+3. Убедиться, что данные находятся в правильной структуре:
+   - data/images/train/ - изображения для обучения
+   - data/labels/train/ - разметка для обучения
+   - data/images/val/ - изображения для валидации (опционально, можно разделить автоматически)
+   - data/labels/val/ - разметка для валидации (опционально)
 
 Запуск (из корня проекта):
 
@@ -19,6 +25,7 @@ from pathlib import Path
 import sys
 import os
 import logging
+import platform
 from datetime import datetime
 
 
@@ -68,9 +75,6 @@ def main() -> None:
     # Настройка логирования
     logger = setup_logging()
     
-    # Счетчики для отслеживания пропущенных этапов
-    skipped_steps = []
-    
     # Добавляем корень проекта в PYTHONPATH
     project_root = Path(__file__).resolve().parent
     if str(project_root) not in sys.path:
@@ -89,20 +93,6 @@ def main() -> None:
         
         logger.info("Импорт data модулей...")
         start_time = time.time()
-        
-        logger.info("  Импорт extract_frames...")
-        from src.data.extract_frames import auto_extract_frames
-        logger.info(f"  extract_frames импортирован за {time.time() - start_time:.2f} сек")
-        
-        start_time = time.time()
-        logger.info("  Импорт auto_prelabel...")
-        from src.data.auto_prelabel import auto_prelabel
-        logger.info(f"  auto_prelabel импортирован за {time.time() - start_time:.2f} сек")
-        
-        start_time = time.time()
-        logger.info("  Импорт split_dataset...")
-        from src.data.split_dataset import split_dataset
-        logger.info(f"  split_dataset импортирован за {time.time() - start_time:.2f} сек")
         
         start_time = time.time()
         logger.info("  Импорт data_utils...")
@@ -149,150 +139,9 @@ def main() -> None:
             logger.error(f"Ошибка при настройке конфигурации: {e}", exc_info=True)
             raise
         
-        # 2. Извлечение кадров из видео (если есть видео и еще не извлечены)
+        # 2. Проверка структуры данных и разметки
         logger.info("=" * 70)
-        logger.info("ШАГ 2: Извлечение кадров из видео")
-        logger.info("=" * 70)
-        try:
-            train_images_dir = config.data_dir / "images" / "train"
-            train_images_dir.mkdir(parents=True, exist_ok=True)
-            
-            # Проверяем, есть ли уже извлеченные кадры
-            existing_images = list(train_images_dir.glob("*.jpg")) + list(train_images_dir.glob("*.png")) + list(
-                train_images_dir.glob("*.jpeg")
-            )
-            
-            logger.info(f"Поиск видео в директории: {config.videos_dir}")
-            video_exts = config.video_extensions
-            logger.info(f"Поддерживаемые расширения: {video_exts}")
-            
-            videos = []
-            for ext in video_exts:
-                logger.debug(f"Поиск файлов с расширением: {ext}")
-                videos.extend(config.videos_dir.glob(f"*{ext}"))
-                videos.extend(config.videos_dir.glob(f"*{ext.upper()}"))
-            
-            logger.info(f"Найдено видео файлов: {len(videos)}")
-            if videos:
-                for i, video in enumerate(videos, 1):
-                    logger.info(f"  [{i}] {video.name}")
-            
-            # Проверяем, нужно ли извлекать кадры
-            if existing_images:
-                logger.info(f"Найдено уже извлеченных кадров: {len(existing_images)}")
-                logger.info("Извлечение кадров пропущено: кадры уже были извлечены ранее.")
-                logger.info("Если нужно извлечь кадры заново, удалите изображения из 'data/images/train/' и запустите скрипт снова.")
-                skipped_steps.append("Извлечение кадров")
-            elif videos:
-                logger.info("Запуск извлечения кадров...")
-                logger.info(f"Шаг извлечения: каждый {config.frame_extraction_step}-й кадр (уменьшен для большего датасета)")
-                total_frames = auto_extract_frames(
-                    videos_dir=str(config.videos_dir),
-                    output_dir=str(train_images_dir),
-                    step=config.frame_extraction_step,  # Уменьшен для увеличения датасета
-                )
-                logger.info(f"Кадры извлечены: {total_frames}")
-            else:
-                logger.warning("В папке 'videos/' не найдено видео. Шаг извлечения кадров пропущен.")
-                logger.info("Если у вас есть видео, поместите их в папку 'videos/' и запустите скрипт снова.")
-        except Exception as e:
-            logger.error(f"Ошибка при извлечении кадров: {e}", exc_info=True)
-            logger.warning("Продолжаем выполнение пайплайна...")
-        
-        # 3. Автоматическая предразметка (если есть изображения и нет разметки)
-        logger.info("=" * 70)
-        logger.info("ШАГ 3: Автоматическая предразметка")
-        logger.info("=" * 70)
-        try:
-            train_images_dir = config.data_dir / "images" / "train"
-            train_labels_dir = config.data_dir / "labels" / "train"
-            logger.info(f"Проверка изображений в: {train_images_dir}")
-            logger.info(f"Проверка разметки в: {train_labels_dir}")
-            
-            train_images = list(train_images_dir.glob("*.jpg")) + list(train_images_dir.glob("*.png")) + list(
-                train_images_dir.glob("*.jpeg")
-            )
-            train_labels = list(train_labels_dir.glob("*.txt"))
-            
-            logger.info(f"Найдено изображений: {len(train_images)}")
-            logger.info(f"Найдено файлов разметки: {len(train_labels)}")
-            
-            # Проверяем, сколько изображений уже имеют разметку
-            images_with_labels = 0
-            for img in train_images:
-                label_file = train_labels_dir / f"{img.stem}.txt"
-                if label_file.exists():
-                    images_with_labels += 1
-            
-            if train_images and not train_labels:
-                logger.info(f"Запуск авторазметки для {len(train_images)} изображений...")
-                stats = auto_prelabel(
-                    images_dir=str(train_images_dir),
-                    labels_dir=str(train_labels_dir),
-                    conf_threshold=config.prelabel_conf_threshold,
-                )
-                logger.info(f"Авторазметка завершена: обработано {stats.get('processed', 0)}, аннотаций {stats.get('annotations', 0)}, ошибок {stats.get('errors', 0)}")
-                logger.info("Рекомендуется после этого пройтись по разметке в LabelImg и подправить сложные случаи.")
-            else:
-                if not train_images:
-                    logger.warning("Авторазметка пропущена: нет изображений в data/images/train/")
-                else:
-                    logger.info(f"Авторазметка пропущена: найдено {len(train_labels)} файлов разметки для {len(train_images)} изображений")
-                    if images_with_labels < len(train_images):
-                        missing = len(train_images) - images_with_labels
-                        logger.info(f"  Примечание: {missing} изображений без разметки. Для доразметки запустите авторазметку вручную.")
-                    else:
-                        logger.info("  Все изображения имеют разметку.")
-                    skipped_steps.append("Авторазметка")
-        except Exception as e:
-            logger.error(f"Ошибка при авторазметке: {e}", exc_info=True)
-            logger.warning("Продолжаем выполнение пайплайна...")
-        
-        # 4. Разделение на train/val (если val пустой)
-        logger.info("=" * 70)
-        logger.info("ШАГ 4: Разделение датасета на train/val")
-        logger.info("=" * 70)
-        try:
-            val_images_dir = config.data_dir / "images" / "val"
-            val_labels_dir = config.data_dir / "labels" / "val"
-            val_images = list(val_images_dir.glob("*.jpg")) + list(val_images_dir.glob("*.png")) + list(
-                val_images_dir.glob("*.jpeg")
-            )
-            
-            train_images = list(train_images_dir.glob("*.jpg")) + list(train_images_dir.glob("*.png")) + list(
-                train_images_dir.glob("*.jpeg")
-            )
-            
-            val_labels = list(val_labels_dir.glob("*.txt"))
-            
-            logger.info(f"Train: {len(train_images)} изображений, {len(list(train_labels_dir.glob('*.txt')))} разметок")
-            logger.info(f"Val: {len(val_images)} изображений, {len(val_labels)} разметок")
-            
-            if train_images and not val_images:
-                logger.info(f"Запуск разделения train/val (ratio={config.val_ratio})...")
-                moved_images, moved_labels = split_dataset(
-                    train_images_dir=str(train_images_dir),
-                    train_labels_dir=str(train_labels_dir),
-                    val_images_dir=str(val_images_dir),
-                    val_labels_dir=str(val_labels_dir),
-                    val_ratio=config.val_ratio,
-                    seed=config.random_seed,
-                )
-                logger.info(f"Разделение выполнено: {moved_images} изображений, {moved_labels} разметок перемещено в val/")
-            else:
-                if not train_images:
-                    logger.warning("Разделение train/val пропущено: нет изображений в data/images/train/")
-                else:
-                    logger.info(f"Разделение train/val пропущено: валидационная выборка уже существует ({len(val_images)} изображений)")
-                    logger.info("  Если нужно переразделить датасет, удалите содержимое 'data/images/val/' и 'data/labels/val/' и запустите скрипт снова.")
-                    skipped_steps.append("Разделение train/val")
-        except Exception as e:
-            logger.error(f"Ошибка при разделении датасета: {e}", exc_info=True)
-            logger.warning("Продолжаем выполнение пайплайна...")
-        
-        # 5. Проверка структуры данных и разметки
-        logger.info("=" * 70)
-        logger.info("ШАГ 5: Проверка структуры данных и разметки")
+        logger.info("ШАГ 2: Проверка структуры данных и разметки")
         logger.info("=" * 70)
         try:
             data_ok = check_data_structure(data_root=str(config.data_dir))
@@ -325,9 +174,9 @@ def main() -> None:
             logger.error(f"Ошибка при проверке данных: {e}", exc_info=True)
             raise
         
-        # 6. Обучение модели
+        # 3. Обучение модели
         logger.info("=" * 70)
-        logger.info("ШАГ 6: Обучение модели YOLOv8")
+        logger.info("ШАГ 3: Обучение модели YOLOv8")
         logger.info("=" * 70)
         try:
             logger.info("Инициализация PPEDetectorTrainer...")
@@ -363,12 +212,22 @@ def main() -> None:
                 batch_size = config.batch_size
                 img_size = config.img_size
                 logger.info(f"Используется GPU: epochs={epochs}, batch_size={batch_size}, img_size={img_size}")
-                logger.info("  Параметры МАКСИМАЛЬНО оптимизированы для скорости:")
-                logger.info("    - Ожидается ~40-60 it/s (вместо 6)")
-                logger.info("    - Время обучения: ~1-2 часа (вместо 8-12 часов)")
-                logger.info("    - Эпохи: 30 (было 50, изначально 100)")
-                logger.info("    - Augmentation минимизирована для скорости")
-                logger.info("    - Ускорение: ~5-10x")
+                if platform.system() == 'Linux':
+                    logger.info("  Параметры МАКСИМАЛЬНО оптимизированы для Linux:")
+                    logger.info("    - Ожидается ~40-60 it/s (вместо 6)")
+                    logger.info("    - Время обучения: ~1-2 часа (вместо 8-12 часов)")
+                    logger.info("    - Эпохи: 30 (было 50, изначально 100)")
+                    logger.info("    - Workers: до 12 (Linux оптимизация)")
+                    logger.info("    - Multiprocessing: 'fork' метод (быстрее)")
+                    logger.info("    - Augmentation минимизирована для скорости")
+                    logger.info("    - Ускорение: ~5-10x")
+                else:
+                    logger.info("  Параметры МАКСИМАЛЬНО оптимизированы для скорости:")
+                    logger.info("    - Ожидается ~40-60 it/s (вместо 6)")
+                    logger.info("    - Время обучения: ~1-2 часа (вместо 8-12 часов)")
+                    logger.info("    - Эпохи: 30 (было 50, изначально 100)")
+                    logger.info("    - Augmentation минимизирована для скорости")
+                    logger.info("    - Ускорение: ~5-10x")
             
             logger.info("Запуск обучения...")
             logger.info(f"Параметры: epochs={epochs}, img_size={img_size}, batch_size={batch_size}, patience={config.patience}, workers={config.workers}")
@@ -407,9 +266,9 @@ def main() -> None:
             logger.error(f"Ошибка при обучении модели: {e}", exc_info=True)
             raise
         
-        # 7. Быстрый тест модели на одном изображении
+        # 4. Быстрый тест модели на одном изображении
         logger.info("=" * 70)
-        logger.info("ШАГ 7: Быстрый тест обученной модели")
+        logger.info("ШАГ 4: Быстрый тест обученной модели")
         logger.info("=" * 70)
         try:
             # Проверяем, что best_model_path был определен
@@ -459,18 +318,7 @@ def main() -> None:
         logger.info("")
         logger.info("📋 ЧТО БЫЛО СДЕЛАНО:")
         logger.info("  ✓ Структура проекта и конфигурация подготовлены")
-        if "Извлечение кадров" not in skipped_steps:
-            logger.info("  ✓ Кадры из видео извлечены (если видео были)")
-        else:
-            logger.info("  ⊘ Извлечение кадров пропущено (кадры уже были извлечены ранее)")
-        if "Авторазметка" not in skipped_steps:
-            logger.info("  ✓ Предразметка выполнена (если не было разметки)")
-        else:
-            logger.info("  ⊘ Авторазметка пропущена (разметка уже существует)")
-        if "Разделение train/val" not in skipped_steps:
-            logger.info("  ✓ Данные разделены на train/val")
-        else:
-            logger.info("  ⊘ Разделение train/val пропущено (валидационная выборка уже существует)")
+        logger.info("  ✓ Структура данных и разметка проверены")
         logger.info("  ✓ Модель обучена")
         logger.info("  ✓ Быстрый тест модели на одном изображении выполнен")
         logger.info("")
@@ -497,10 +345,6 @@ def main() -> None:
             logger.info("📝 ЛОГИ:")
             logger.info(f"   📍 Лог pipeline: logs/pipeline_*.log")
             logger.info(f"   📍 Лог обучения: {experiment_dir / 'logs'}")
-            logger.info("")
-        
-        if skipped_steps:
-            logger.info(f"ℹ️  Пропущенные этапы (уже выполнены ранее): {', '.join(skipped_steps)}")
             logger.info("")
         
         logger.info("=" * 70)

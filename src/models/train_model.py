@@ -16,13 +16,16 @@ from typing import Optional, Dict, List
 from datetime import datetime
 # YOLO импортируется лениво внутри методов, чтобы не замедлять импорт модуля
 
-# Настройка multiprocessing для Windows (исправляет ConnectionResetError)
+# Настройка multiprocessing
+# На Linux используется 'fork' по умолчанию (быстрее чем 'spawn' на Windows)
+# На Windows используем 'spawn' для избежания ConnectionResetError
 if platform.system() == 'Windows':
     try:
         multiprocessing.set_start_method('spawn', force=True)
     except RuntimeError:
         # Если уже установлен, игнорируем
         pass
+# На Linux не нужно менять start_method - 'fork' уже оптимален
 
 
 class PPEDetectorTrainer:
@@ -155,17 +158,28 @@ class PPEDetectorTrainer:
         Returns:
             Словарь с результатами обучения
         """
-        # Автоматическое определение количества workers для избежания ConnectionResetError
-        # Увеличено для лучшей скорости загрузки данных
+        # Автоматическое определение количества workers
+        # На Linux можно использовать больше workers благодаря лучшей поддержке multiprocessing
         if workers is None:
-            if platform.system() == 'Windows':
-                # На Windows используем больше workers для скорости (но безопасно)
-                workers = min(6, multiprocessing.cpu_count() - 1)  # Оставляем 1 ядро системе
+            if platform.system() == 'Linux':
+                # На Linux используем максимум workers для максимальной скорости
+                # 'fork' метод позволяет эффективно использовать больше процессов
+                cpu_count = multiprocessing.cpu_count()
+                workers = min(12, cpu_count - 1)  # До 12 workers на Linux
                 if workers == 0:
                     workers = 1
+                self.logger.info(f"Linux detected: используем {workers} workers (из {cpu_count} CPU ядер)")
+            elif platform.system() == 'Windows':
+                # На Windows используем меньше workers из-за 'spawn' метода
+                workers = min(6, multiprocessing.cpu_count() - 1)
+                if workers == 0:
+                    workers = 1
+                self.logger.info(f"Windows detected: используем {workers} workers")
             else:
-                # На Linux/Mac можно использовать еще больше
+                # Mac или другая система
                 workers = min(8, multiprocessing.cpu_count() - 1)
+                if workers == 0:
+                    workers = 1
         
         self.logger.info("=" * 70)
         self.logger.info("=== НАЧАЛО ОБУЧЕНИЯ ===")
@@ -185,15 +199,25 @@ class PPEDetectorTrainer:
         self.logger.info("  - Размер изображения: 640x640 (стандартный YOLO, максимальная скорость)")
         self.logger.info("  - Batch size: 8 (максимальная утилизация GPU)")
         self.logger.info("  - Augmentation: минимальная (mosaic/mixup/copy_paste отключены)")
-        self.logger.info("  - Workers: увеличено для быстрой загрузки данных")
+        if platform.system() == 'Linux':
+            self.logger.info("  - Workers: до 12 (Linux оптимизация, 'fork' метод)")
+            self.logger.info("  - Multiprocessing: 'fork' метод (быстрее чем 'spawn' на Windows)")
+        else:
+            self.logger.info("  - Workers: увеличено для быстрой загрузки данных")
         self.logger.info("  - Mixed Precision (AMP): включен")
         self.logger.info("  - Warmup epochs: 1 (было 3)")
         self.logger.info("  - Эпохи: 30 (было 50, изначально 100)")
         self.logger.info("  - Patience: 10 (быстрая остановка)")
         self.logger.info("")
-        self.logger.info("Ожидаемая скорость: ~40-60 итераций/сек (вместо 6)")
-        self.logger.info("Время обучения: ~1-2 часа (вместо 8-12 часов)")
-        self.logger.info("Ускорение: ~5-10x по сравнению с предыдущими настройками")
+        if platform.system() == 'Linux':
+            self.logger.info("Ожидаемая скорость на Linux: ~40-60 итераций/сек (вместо 6)")
+            self.logger.info("Время обучения: ~1-2 часа (вместо 8-12 часов)")
+            self.logger.info("Ускорение: ~5-10x по сравнению с предыдущими настройками")
+            self.logger.info("Linux преимущества: больше workers, быстрый 'fork' multiprocessing")
+        else:
+            self.logger.info("Ожидаемая скорость: ~40-60 итераций/сек (вместо 6)")
+            self.logger.info("Время обучения: ~1-2 часа (вместо 8-12 часов)")
+            self.logger.info("Ускорение: ~5-10x по сравнению с предыдущими настройками")
         
         # Проверка доступной памяти GPU
         if torch.cuda.is_available() and self.device != "cpu":

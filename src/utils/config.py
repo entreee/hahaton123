@@ -40,7 +40,7 @@ class ProjectConfig:
     img_size: int = 640  # Стандартный размер YOLO для максимальной скорости (~40-60 it/s)
     batch_size: int = 8  # Максимальная утилизация GPU (было 4)
     patience: int = 10  # Быстрая остановка при отсутствии улучшений
-    workers: Optional[int] = None  # None = автоопределение (исправляет ConnectionResetError на Windows)
+    workers: Optional[int] = None  # None = автоопределение (на Linux до 12, на Windows до 6)
     device: str = "auto"
     
     # Разметка

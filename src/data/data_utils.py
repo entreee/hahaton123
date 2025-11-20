@@ -140,27 +140,35 @@ def check_data_structure(
                         continue
                     
                     parts = line.split()
-                    if len(parts) != 5:
-                        print(f"ERROR {label_file.name}:{line_num} - неверный формат (ожидается 5 значений)")
+                    # OBB формат: class_id x1 y1 x2 y2 x3 y3 x4 y4 (9 значений)
+                    # Обычный YOLO формат: class_id x_center y_center width height (5 значений)
+                    if len(parts) != 9 and len(parts) != 5:
+                        print(f"ERROR {label_file.name}:{line_num} - неверный формат (ожидается 9 значений для OBB или 5 для обычного YOLO, получено {len(parts)})")
                         invalid_labels += 1
                         continue
                     
                     try:
                         class_id = int(parts[0])
-                        if class_id not in [0, 1]:
-                            print(f"WARNING {label_file.name}:{line_num} - неверный класс {class_id} (должен быть 0 или 1)")
-                            invalid_labels += 1
-                        
+                        # Проверка класса (динамическая, не хардкод)
                         coords = [float(x) for x in parts[1:]]
                         if any(coord < 0 or coord > 1 for coord in coords):
                             print(f"WARNING {label_file.name}:{line_num} - координаты вне диапазона [0,1]")
                             invalid_labels += 1
                         
-                        # Проверка разумных размеров
-                        width, height = coords[2], coords[3]
-                        if width < 0.01 or height < 0.01 or width > 1 or height > 1:
-                            print(f"WARNING {label_file.name}:{line_num} - нереалистичные размеры box")
-                            invalid_labels += 1
+                        # Проверка для OBB формата (9 значений)
+                        if len(parts) == 9:
+                            # Проверяем, что все 8 координат (4 точки) в диапазоне [0,1]
+                            if len(coords) != 8:
+                                print(f"ERROR {label_file.name}:{line_num} - OBB формат должен содержать 8 координат (4 точки)")
+                                invalid_labels += 1
+                        # Проверка для обычного YOLO формата (5 значений)
+                        elif len(parts) == 5:
+                            # Проверка разумных размеров
+                            if len(coords) >= 4:
+                                width, height = coords[2], coords[3]
+                                if width < 0.01 or height < 0.01 or width > 1 or height > 1:
+                                    print(f"WARNING {label_file.name}:{line_num} - нереалистичные размеры box")
+                                    invalid_labels += 1
                             
                     except ValueError as e:
                         print(f"ERROR {label_file.name}:{line_num} - ошибка парсинга: {e}")

@@ -133,7 +133,7 @@ class PPEDetectorTrainer:
     
     def train(
         self,
-        epochs: int = 30,
+        epochs: int = 60,
         img_size: int = 640,
         batch_size: int = 16,
         patience: int = 10,

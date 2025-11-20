@@ -202,7 +202,7 @@ def main() -> None:
             logger.info(f"  - Порог уверенности: {config.conf_threshold} (понижен для маленьких объектов)")
             
             if config.device == "cpu":
-                epochs = 30  # Уменьшено для CPU
+                epochs = 60  # Количество эпох для CPU
                 batch_size = 4  # Оптимизировано для скорости
                 img_size = 640  # Стандартный размер для CPU (быстрее)
                 logger.info(f"Используется CPU: epochs={epochs}, batch_size={batch_size}, img_size={img_size}")
@@ -215,8 +215,8 @@ def main() -> None:
                 if platform.system() == 'Linux':
                     logger.info("  Параметры МАКСИМАЛЬНО оптимизированы для Linux:")
                     logger.info("    - Ожидается ~40-60 it/s (вместо 6)")
-                    logger.info("    - Время обучения: ~1-2 часа (вместо 8-12 часов)")
-                    logger.info("    - Эпохи: 30 (было 50, изначально 100)")
+                    logger.info("    - Время обучения: ~2-3 часа (60 эпох)")
+                    logger.info("    - Эпохи: 60")
                     logger.info("    - Workers: до 12 (Linux оптимизация)")
                     logger.info("    - Multiprocessing: 'fork' метод (быстрее)")
                     logger.info("    - Augmentation минимизирована для скорости")
@@ -224,8 +224,8 @@ def main() -> None:
                 else:
                     logger.info("  Параметры МАКСИМАЛЬНО оптимизированы для скорости:")
                     logger.info("    - Ожидается ~40-60 it/s (вместо 6)")
-                    logger.info("    - Время обучения: ~1-2 часа (вместо 8-12 часов)")
-                    logger.info("    - Эпохи: 30 (было 50, изначально 100)")
+                    logger.info("    - Время обучения: ~2-3 часа (60 эпох)")
+                    logger.info("    - Эпохи: 60")
                     logger.info("    - Augmentation минимизирована для скорости")
                     logger.info("    - Ускорение: ~5-10x")
             

@@ -57,8 +57,8 @@ class PPEDetector:
         # Ленивый импорт YOLO (только при инициализации детектора)
         from ultralytics import YOLO
         
-        # Загрузка модели
-        self.model = YOLO(str(model_path))
+        # Загрузка модели OBB (Oriented Bounding Box) для rotated boxes
+        self.model = YOLO(str(model_path), task='obb')
         
         # Устройство
         if device == "auto":
@@ -68,7 +68,8 @@ class PPEDetector:
         self.device = device
         self.model.to(device)
         
-        print(f"Детектор загружен: {model_path}")
+        print(f"Детектор OBB загружен: {model_path}")
+        print(f"Поддержка rotated bounding boxes: включена")
         print(f"Устройство: {device}")
         print(f"Порог уверенности: {conf_threshold}")
     
@@ -101,40 +102,53 @@ class PPEDetector:
         original_image = image.copy()
         height, width = image.shape[:2]
         
-        # Детекция (оптимизировано для очень маленьких объектов)
+        # Детекция OBB (оптимизировано для очень маленьких объектов)
         results = self.model.predict(
             image_path,
             conf=self.conf_threshold,
             verbose=False,
             device=self.device,
             imgsz=1600,  # Максимальный размер для лучшей детекции очень маленьких объектов
-            iou=0.4,  # Еще более понижен IoU для очень маленьких объектов
+            iou=0.4,  # Понижен IoU для очень маленьких объектов
             agnostic_nms=False,
-            max_det=500,  # Увеличено максимальное количество детекций для множества маленьких объектов
+            max_det=500,  # Увеличено максимальное количество детекций
         )
         
         detections = []
-        boxes = results[0].boxes
+        # Получаем OBB объекты для rotated boxes
+        try:
+            obbs = results[0].obbs  # OBB объекты для rotated boxes
+        except AttributeError:
+            # Fallback: если obbs недоступен
+            print("⚠️  Предупреждение: OBB результаты недоступны, модель может быть не OBB")
+            obbs = None
         
-        if boxes is not None:
-            for i, box in enumerate(boxes):
-                # Координаты
-                x1, y1, x2, y2 = box.xyxy[0].cpu().numpy().astype(int)
+        if obbs is not None and len(obbs) > 0:
+            for i, obb in enumerate(obbs):
+                # Получаем 4 точки углов rotated bounding box
+                # Формат: [[x1, y1], [x2, y2], [x3, y3], [x4, y4]]
+                points = obb.xyxyxyxy[0].cpu().numpy().astype(int)  # 4 точки углов
                 
                 # Класс и уверенность
-                class_id = int(box.cls[0].cpu().numpy())
-                confidence = float(box.conf[0].cpu().numpy())
+                class_id = int(obb.cls[0].cpu().numpy())
+                confidence = float(obb.conf[0].cpu().numpy())
                 
                 if confidence >= self.conf_threshold:
                     # Цвет и название класса
-                    color = CLASS_COLORS.get(class_id, (255, 255, 255))  # Белый по умолчанию
+                    color = CLASS_COLORS.get(class_id, (255, 255, 255))
                     class_name = CLASS_NAMES.get(class_id, f"class_{class_id}")
                     
-                    # Рисуем bounding box
-                    cv2.rectangle(
-                        image, (x1, y1), (x2, y2),
-                        color, line_thickness
+                    # Рисуем rotated bounding box (4 точки)
+                    pts = points.reshape((-1, 1, 2))
+                    cv2.polylines(
+                        image, [pts], True, color, line_thickness
                     )
+                    
+                    # Вычисляем bounding box для текста (минимальный прямоугольник)
+                    x_coords = points[:, 0]
+                    y_coords = points[:, 1]
+                    x1_text = int(x_coords.min())
+                    y1_text = int(y_coords.min())
                     
                     # Подпись
                     label = f"{class_name}"
@@ -147,26 +161,30 @@ class PPEDetector:
                     )[0]
                     cv2.rectangle(
                         image,
-                        (x1, y1 - label_size[1] - 10),
-                        (x1 + label_size[0], y1),
+                        (x1_text, y1_text - label_size[1] - 10),
+                        (x1_text + label_size[0], y1_text),
                         color, -1
                     )
                     
                     # Текст подписи
                     cv2.putText(
                         image, label,
-                        (x1, y1 - 5),
+                        (x1_text, y1_text - 5),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6,
                         (255, 255, 255), 2  # Белый текст
                     )
                     
-                    # Сохраняем информацию о детекции
+                    # Вычисляем площадь rotated box
+                    area = cv2.contourArea(points)
+                    
+                    # Сохраняем информацию о детекции (4 точки углов)
                     detections.append({
                         'class_id': class_id,
                         'class_name': class_name,
                         'confidence': confidence,
-                        'bbox': [x1, y1, x2, y2],
-                        'area': (x2 - x1) * (y2 - y1)
+                        'obb_points': points.tolist(),  # 4 точки углов rotated box
+                        'bbox': [x1_text, y1_text, int(x_coords.max()), int(y_coords.max())],  # Минимальный прямоугольник
+                        'area': area
                     })
         
         # Сохранение результата
@@ -237,42 +255,52 @@ class PPEDetector:
             if not ret:
                 break
             
-            # Детекция на кадре (оптимизировано для очень маленьких объектов)
+            # Детекция OBB на кадре
             results = self.model.predict(
                 frame,
                 conf=conf_threshold,
                 verbose=False,
                 device=self.device,
-                imgsz=1600,  # Максимальный размер для лучшей детекции очень маленьких объектов
+                imgsz=1600,
                 iou=0.4,
                 max_det=500,
             )
             
-            # Рисуем детекции (используем тот же код, что и для изображений)
-            boxes = results[0].boxes
+            # Рисуем rotated bounding boxes
+            obbs = results[0].obbs
             frame_detections = 0
             
-            if boxes is not None:
-                for box in boxes:
-                    x1, y1, x2, y2 = box.xyxy[0].cpu().numpy().astype(int)
-                    class_id = int(box.cls[0].cpu().numpy())
-                    confidence = float(box.conf[0].cpu().numpy())
+            if obbs is not None and len(obbs) > 0:
+                for obb in obbs:
+                    # Получаем 4 точки углов rotated box
+                    points = obb.xyxyxyxy[0].cpu().numpy().astype(int)
+                    class_id = int(obb.cls[0].cpu().numpy())
+                    confidence = float(obb.conf[0].cpu().numpy())
                     
                     if confidence >= conf_threshold:
                         color = CLASS_COLORS.get(class_id, (255, 255, 255))
-                        cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+                        
+                        # Рисуем rotated bounding box
+                        pts = points.reshape((-1, 1, 2))
+                        cv2.polylines(frame, [pts], True, color, 2)
+                        
+                        # Текст
+                        x_coords = points[:, 0]
+                        y_coords = points[:, 1]
+                        x1_text = int(x_coords.min())
+                        y1_text = int(y_coords.min())
                         
                         label = f"{CLASS_NAMES.get(class_id, 'unknown')}"
-                        if confidence < 0.9:  # Показываем уверенность для неуверенных
+                        if confidence < 0.9:
                             label += f": {confidence:.2f}"
                         
                         label_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)[0]
                         cv2.rectangle(
-                            frame, (x1, y1 - label_size[1] - 10),
-                            (x1 + label_size[0], y1), color, -1
+                            frame, (x1_text, y1_text - label_size[1] - 10),
+                            (x1_text + label_size[0], y1_text), color, -1
                         )
                         cv2.putText(
-                            frame, label, (x1, y1 - 5),
+                            frame, label, (x1_text, y1_text - 5),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2
                         )
                         
@@ -351,30 +379,39 @@ class PPEDetector:
             if max_frames and frame_count >= max_frames:
                 break
             
-            # Детекция (оптимизировано для очень маленьких объектов)
+            # Детекция OBB
             results = self.model.predict(
                 frame,
                 conf=conf_threshold,
                 verbose=False,
                 device=self.device,
-                imgsz=1600,  # Максимальный размер для лучшей детекции очень маленьких объектов
+                imgsz=1600,
                 iou=0.4,
                 max_det=500,
             )
             
-            # Рисуем детекции
-            boxes = results[0].boxes
+            # Рисуем rotated bounding boxes
+            obbs = results[0].obbs
             frame_detections = 0
             
-            if boxes is not None:
-                for box in boxes:
-                    x1, y1, x2, y2 = box.xyxy[0].cpu().numpy().astype(int)
-                    class_id = int(box.cls[0].cpu().numpy())
-                    confidence = float(box.conf[0].cpu().numpy())
+            if obbs is not None and len(obbs) > 0:
+                for obb in obbs:
+                    points = obb.xyxyxyxy[0].cpu().numpy().astype(int)
+                    class_id = int(obb.cls[0].cpu().numpy())
+                    confidence = float(obb.conf[0].cpu().numpy())
                     
                     if confidence >= conf_threshold:
                         color = CLASS_COLORS.get(class_id, (255, 255, 255))
-                        cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+                        
+                        # Рисуем rotated box
+                        pts = points.reshape((-1, 1, 2))
+                        cv2.polylines(frame, [pts], True, color, 2)
+                        
+                        # Текст
+                        x_coords = points[:, 0]
+                        y_coords = points[:, 1]
+                        x1_text = int(x_coords.min())
+                        y1_text = int(y_coords.min())
                         
                         label = f"{CLASS_NAMES.get(class_id, 'unknown')}"
                         if confidence < 0.9:
@@ -382,11 +419,11 @@ class PPEDetector:
                         
                         label_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)[0]
                         cv2.rectangle(
-                            frame, (x1, y1 - label_size[1] - 10),
-                            (x1 + label_size[0], y1), color, -1
+                            frame, (x1_text, y1_text - label_size[1] - 10),
+                            (x1_text + label_size[0], y1_text), color, -1
                         )
                         cv2.putText(
-                            frame, label, (x1, y1 - 5),
+                            frame, label, (x1_text, y1_text - 5),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2
                         )
                         
@@ -564,7 +601,7 @@ def visualize_detections(
     """
     # Ленивый импорт matplotlib (только когда функция вызывается)
     import matplotlib.pyplot as plt
-    from matplotlib.patches import Rectangle
+    from matplotlib.patches import Rectangle, Polygon
     
     fig, ax = plt.subplots(1, 1, figsize=figsize)
     
@@ -574,12 +611,11 @@ def visualize_detections(
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     
     ax.imshow(image)
-    ax.set_title("Детекция СИЗ", fontsize=16, fontweight='bold')
+    ax.set_title("Детекция СИЗ (Rotated Bounding Boxes)", fontsize=16, fontweight='bold')
     ax.axis('off')
     
-    # Рисуем bounding boxes
+    # Рисуем rotated bounding boxes
     for detection in detections:
-        x1, y1, x2, y2 = detection['bbox']
         class_id = detection['class_id']
         confidence = detection['confidence']
         
@@ -587,13 +623,26 @@ def visualize_detections(
         color = class_colors.get(class_id, 'white')
         class_name = class_names.get(class_id, f'class_{class_id}')
         
-        # Bounding box
-        rect = Rectangle(
-            (x1, y1), (x2 - x1), (y2 - y1),
-            linewidth=2, edgecolor=color, facecolor='none',
-            alpha=0.7
-        )
-        ax.add_patch(rect)
+        # Rotated bounding box (4 точки)
+        if 'obb_points' in detection:
+            # Rotated box с 4 точками
+            points = np.array(detection['obb_points'])
+            poly = Polygon(
+                points, linewidth=2, edgecolor=color, facecolor='none',
+                alpha=0.7
+            )
+            ax.add_patch(poly)
+            x1_text, y1_text = points.min(axis=0)
+        else:
+            # Обычный прямоугольник (fallback)
+            x1, y1, x2, y2 = detection['bbox']
+            rect = Rectangle(
+                (x1, y1), (x2 - x1), (y2 - y1),
+                linewidth=2, edgecolor=color, facecolor='none',
+                alpha=0.7
+            )
+            ax.add_patch(rect)
+            x1_text, y1_text = x1, y1
         
         # Подпись
         label = f"{class_name}: {confidence:.2f}"

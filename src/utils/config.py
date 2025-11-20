@@ -30,10 +30,10 @@ class ProjectConfig:
     classes: Dict[int, str] = None
     class_colors: Dict[int, tuple] = None
     
-    # Модель (используем более крупную модель для лучшей детекции очень маленьких объектов)
-    model_name: str = "yolov8l.pt"  # Large модель для максимальной точности на маленьких объектах
-    experiment_name: str = "ppe_detection"
-    conf_threshold: float = 0.2  # Еще более понижен для очень маленьких объектов
+    # Модель OBB (Oriented Bounding Box) для rotated bounding boxes
+    model_name: str = "yolov8l-obb.pt"  # Large OBB модель для rotated bounding boxes
+    experiment_name: str = "ppe_detection_obb"
+    conf_threshold: float = 0.2  # Понижен для очень маленьких объектов
     
     # Обучение (максимально оптимизировано для скорости)
     epochs: int = 30  # Минимум для качественного обучения (было 50, изначально 100)

@@ -37,7 +37,7 @@ class PPEDetectorTrainer:
     
     def __init__(
         self,
-        model_name: str = "yolov8n.pt",
+        model_name: str = "yolov8n-obb.pt",  # OBB модель для rotated bounding boxes
         config_path: str = "config/ppe_data.yaml",
         project_dir: str = "models",
         experiment_name: str = "ppe_detection"
@@ -279,17 +279,23 @@ class PPEDetectorTrainer:
             self.logger.error(f"Ошибка при импорте YOLO: {e}")
             raise
         
-        self.logger.info(f"Загрузка модели: {self.model_name}")
+        self.logger.info(f"Загрузка модели OBB (Oriented Bounding Box): {self.model_name}")
         try:
-            model = YOLO(self.model_name)
-            self.logger.info("✓ Модель успешно загружена")
+            # YOLOv8-OBB для rotated bounding boxes
+            model = YOLO(self.model_name, task='obb')
+            self.logger.info("✓ Модель OBB успешно загружена (поддержка rotated bounding boxes)")
             
             # Информация о модели
             if hasattr(model, 'names'):
                 self.logger.info(f"  Классы: {list(model.names.values())}")
         except FileNotFoundError:
             self.logger.error(f"Файл модели не найден: {self.model_name}")
-            self.logger.error("Убедитесь, что файл существует или используйте предобученную модель (yolov8n.pt, yolov8s.pt, и т.д.)")
+            self.logger.error("Убедитесь, что файл существует или используйте предобученную OBB модель:")
+            self.logger.error("  - yolov8n-obb.pt (nano, быстрая)")
+            self.logger.error("  - yolov8s-obb.pt (small)")
+            self.logger.error("  - yolov8m-obb.pt (medium)")
+            self.logger.error("  - yolov8l-obb.pt (large, точная)")
+            self.logger.error("  - yolov8x-obb.pt (xlarge, максимальная точность)")
             raise
         except Exception as e:
             self.logger.error(f"Ошибка загрузки модели: {e}")

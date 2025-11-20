@@ -718,13 +718,33 @@ def create_trainer_config(
     
     Args:
         config_path: Путь к конфигурации
-        classes: Список классов (если None - стандартные)
+        classes: Список классов (если None - загружает из classes.txt)
         
     Returns:
         Путь к созданному файлу
     """
     if classes is None:
-        classes = ['helmet', 'vest']
+        # Загружаем классы из файла classes.txt
+        classes_file = None
+        for path in [Path("classes.txt"), Path("data/classes.txt"), Path("config/classes.txt")]:
+            if path.exists():
+                classes_file = path
+                break
+        
+        if classes_file is None:
+            raise FileNotFoundError(
+                "Файл classes.txt не найден! Создайте файл classes.txt с перечислением классов (по одному на строку)."
+            )
+        
+        classes = []
+        with open(classes_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                class_name = line.strip()
+                if class_name and not class_name.startswith('#'):
+                    classes.append(class_name)
+        
+        if len(classes) == 0:
+            raise ValueError(f"Файл classes.txt пуст или не содержит классов: {classes_file}")
     
     config_content = f"""path: ./data
 train: images/train

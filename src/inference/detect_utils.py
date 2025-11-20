@@ -15,18 +15,89 @@ from typing import List, Tuple, Optional, Dict
 # YOLO и matplotlib импортируются лениво (только когда нужны) для ускорения импорта модуля
 
 
-# Настройки отображения
-CLASS_NAMES = {
-    0: "helmet (каска - оранжевая/белая)",
-    1: "vest (жилет)"
-}
-
-CLASS_COLORS = {
-    0: (0, 165, 255),    # Оранжевый для каски (BGR) - работает для оранжевых и белых касок
-    1: (0, 255, 255)     # Желтый для жилета (BGR)
-}
-
 CONFIDENCE_THRESHOLD = 0.2  # Понижен для детекции очень маленьких объектов
+
+
+def _load_classes_from_file() -> Dict[int, str]:
+    """
+    Загружает классы из файла classes.txt.
+    
+    Returns:
+        Словарь {id: название_класса}
+    """
+    from pathlib import Path
+    
+    # Ищем файл classes.txt в нескольких местах
+    possible_paths = [
+        Path(".") / "classes.txt",
+        Path("data") / "classes.txt",
+        Path("config") / "classes.txt"
+    ]
+    
+    classes_file = None
+    for path in possible_paths:
+        if path.exists():
+            classes_file = path
+            break
+    
+    if classes_file is None:
+        raise FileNotFoundError(
+            f"Файл classes.txt не найден! Искали в:\n" +
+            "\n".join(f"  - {p}" for p in possible_paths) +
+            "\n\nСоздайте файл classes.txt с перечислением классов (по одному на строку)."
+        )
+    
+    classes = {}
+    try:
+        with open(classes_file, 'r', encoding='utf-8') as f:
+            for idx, line in enumerate(f):
+                class_name = line.strip()
+                if class_name and not class_name.startswith('#'):  # Пропускаем пустые строки и комментарии
+                    classes[idx] = class_name
+        
+        if len(classes) == 0:
+            raise ValueError(f"Файл classes.txt пуст или не содержит классов: {classes_file}")
+        
+        return classes
+        
+    except Exception as e:
+        raise RuntimeError(f"Ошибка загрузки классов из {classes_file}: {e}")
+
+
+def _generate_class_colors(num_classes: int) -> Dict[int, tuple]:
+    """
+    Генерирует цвета для классов автоматически.
+    
+    Args:
+        num_classes: Количество классов
+    
+    Returns:
+        Словарь {id: (B, G, R)}
+    """
+    # Предопределенная палитра цветов (BGR формат для OpenCV)
+    color_palette = [
+        (0, 165, 255),    # Оранжевый
+        (0, 255, 255),    # Желтый
+        (255, 0, 0),      # Синий
+        (255, 0, 255),   # Пурпурный
+        (0, 255, 0),     # Зеленый
+        (255, 165, 0),   # Голубой
+        (128, 0, 128),   # Фиолетовый
+        (255, 192, 203), # Розовый
+        (0, 128, 255),   # Коричневый
+        (255, 255, 0),   # Циан
+    ]
+    
+    colors = {}
+    for idx in range(num_classes):
+        colors[idx] = color_palette[idx % len(color_palette)]
+    
+    return colors
+
+
+# Загружаем классы при импорте модуля
+CLASS_NAMES = _load_classes_from_file()
+CLASS_COLORS = _generate_class_colors(len(CLASS_NAMES))
 
 
 class PPEDetector:

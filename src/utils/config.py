@@ -59,20 +59,98 @@ class ProjectConfig:
         if self.video_extensions is None:
             self.video_extensions = ['.mp4', '.avi', '.mov', '.mkv', '.flv', '.wmv', '.m4v']
         
+        # Загрузка классов из файла classes.txt
         if self.classes is None:
-            self.classes = {0: 'helmet', 1: 'vest'}
+            self.classes = self._load_classes_from_file()
         
+        # Генерация цветов для классов (если не заданы)
         if self.class_colors is None:
-            self.class_colors = {
-                0: (0, 165, 255),  # Оранжевый для каски (BGR)
-                1: (0, 255, 255)   # Желтый для жилета (BGR)
-            }
+            self.class_colors = self._generate_class_colors()
         
         # Создание директорий
         self._create_directories()
         
         # Определение устройства
         self._detect_device()
+    
+    def _load_classes_from_file(self) -> Dict[int, str]:
+        """
+        Загружает классы из файла classes.txt.
+        
+        Формат файла: одна строка = один класс
+        Пример:
+            helmet
+            vest
+        
+        Returns:
+            Словарь {id: название_класса}
+        """
+        # Ищем файл classes.txt в нескольких местах
+        possible_paths = [
+            self.project_root / "classes.txt",
+            self.data_dir / "classes.txt",
+            self.config_dir / "classes.txt"
+        ]
+        
+        classes_file = None
+        for path in possible_paths:
+            if path.exists():
+                classes_file = path
+                break
+        
+        if classes_file is None:
+            raise FileNotFoundError(
+                f"Файл classes.txt не найден! Искали в:\n" +
+                "\n".join(f"  - {p}" for p in possible_paths) +
+                "\n\nСоздайте файл classes.txt с перечислением классов (по одному на строку)."
+            )
+        
+        classes = {}
+        try:
+            with open(classes_file, 'r', encoding='utf-8') as f:
+                for idx, line in enumerate(f):
+                    class_name = line.strip()
+                    if class_name and not class_name.startswith('#'):  # Пропускаем пустые строки и комментарии
+                        classes[idx] = class_name
+            
+            if len(classes) == 0:
+                raise ValueError(f"Файл classes.txt пуст или не содержит классов: {classes_file}")
+            
+            print(f"✓ Классы загружены из {classes_file}: {len(classes)} классов")
+            for idx, name in classes.items():
+                print(f"  {idx}: {name}")
+            
+            return classes
+            
+        except Exception as e:
+            raise RuntimeError(f"Ошибка загрузки классов из {classes_file}: {e}")
+    
+    def _generate_class_colors(self) -> Dict[int, tuple]:
+        """
+        Генерирует цвета для классов автоматически.
+        
+        Returns:
+            Словарь {id: (B, G, R)}
+        """
+        # Предопределенная палитра цветов (BGR формат для OpenCV)
+        color_palette = [
+            (0, 165, 255),    # Оранжевый
+            (0, 255, 255),    # Желтый
+            (255, 0, 0),      # Синий
+            (255, 0, 255),   # Пурпурный
+            (0, 255, 0),     # Зеленый
+            (255, 165, 0),   # Голубой
+            (128, 0, 128),   # Фиолетовый
+            (255, 192, 203), # Розовый
+            (0, 128, 255),   # Коричневый
+            (255, 255, 0),   # Циан
+        ]
+        
+        colors = {}
+        for idx in range(len(self.classes)):
+            colors[idx] = color_palette[idx % len(color_palette)]
+        
+        return colors
     
     def _create_directories(self):
         """Создает необходимые директории."""
@@ -270,8 +348,11 @@ class ProjectConfig:
         config_file = Path(config_path)
         config_file.parent.mkdir(parents=True, exist_ok=True)
         
+        # Формируем комментарий с классами
+        classes_comment = ", ".join([f"{id}={name}" for id, name in self.classes.items()])
+        
         config_content = f"""# Конфигурация датасета для детекции СИЗ
-# Классы: 0=helmet (защитная каска), 1=vest (сигнальный жилет)
+# Классы загружены из classes.txt: {classes_comment}
 
 path: {self.data_dir}  # Корневая папка с данными
 train: images/train     # Путь к обучающим изображениям (относительно path)
@@ -302,7 +383,7 @@ names:
     
     def create_classes_file(self, classes_path: Optional[str] = None) -> Path:
         """
-        Создает файл классов для LabelImg.
+        Создает файл классов для LabelImg на основе classes.txt.
         
         Args:
             classes_path: Путь для сохранения (если None - data/predefined_classes.txt)
@@ -321,8 +402,8 @@ names:
                 for class_name in self.classes.values():
                     f.write(f"{class_name}\n")
             
-            print(f"Файл классов создан: {classes_file}")
-            print(f"Классы для LabelImg: {list(self.classes.values())}")
+            print(f"Файл классов для LabelImg создан: {classes_file}")
+            print(f"Классы: {list(self.classes.values())}")
             
             return classes_file
             

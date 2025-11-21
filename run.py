@@ -40,10 +40,31 @@ class PPEDetectionApp:
         self.stock_pic_dir.mkdir(exist_ok=True)
         
         # Создание интерфейса
-        self._create_widgets()
+        try:
+            self._create_widgets()
+        except Exception as e:
+            print(f"Ошибка при создании интерфейса: {e}")
+            import traceback
+            traceback.print_exc()
+            # Показываем базовое окно с ошибкой
+            error_label = tk.Label(
+                self.root,
+                text=f"Ошибка создания интерфейса:\n{e}",
+                fg="red",
+                font=("Arial", 10)
+            )
+            error_label.pack(pady=50)
+            return
         
-        # Автопоиск модели
-        self._find_model()
+        # Автопоиск модели (не блокируем запуск приложения)
+        try:
+            self._find_model()
+        except Exception as e:
+            print(f"Ошибка при поиске модели: {e}")
+            self.model_label.config(
+                text=f"Ошибка при поиске модели: {e}",
+                fg="red"
+            )
     
     def _create_widgets(self):
         """Создает элементы интерфейса."""
@@ -55,7 +76,7 @@ class PPEDetectionApp:
         title_label = tk.Label(
             title_frame,
             text="Детекция СИЗ",
-            font=("Arial", 24, "bold"),
+            font=("TkDefaultFont", 20, "bold"),
             bg="#2c3e50",
             fg="white"
         )
@@ -66,13 +87,13 @@ class PPEDetectionApp:
         main_frame.pack(fill=tk.BOTH, expand=True)
         
         # Информация о модели
-        model_frame = tk.LabelFrame(main_frame, text="Модель", font=("Arial", 10, "bold"), padx=10, pady=10)
+        model_frame = tk.LabelFrame(main_frame, text="Модель", font=("TkDefaultFont", 10, "bold"), padx=10, pady=10)
         model_frame.pack(fill=tk.X, pady=(0, 20))
         
         self.model_label = tk.Label(
             model_frame,
             text="Модель не загружена",
-            font=("Arial", 9),
+            font=("TkDefaultFont", 9),
             fg="gray",
             wraplength=500,
             justify=tk.LEFT
@@ -88,28 +109,26 @@ class PPEDetectionApp:
             command=self._select_model,
             bg="#3498db",
             fg="white",
-            font=("Arial", 10),
+            font=("TkDefaultFont", 10),
             padx=15,
-            pady=5,
-            cursor="hand2"
+            pady=5
         )
         self.model_btn.pack(side=tk.LEFT)
         
         # Кнопки действий
-        actions_frame = tk.LabelFrame(main_frame, text="Действия", font=("Arial", 10, "bold"), padx=10, pady=10)
+        actions_frame = tk.LabelFrame(main_frame, text="Действия", font=("TkDefaultFont", 10, "bold"), padx=10, pady=10)
         actions_frame.pack(fill=tk.BOTH, expand=True)
         
         # Кнопка выбора фото
         self.photo_btn = tk.Button(
             actions_frame,
-            text="📷 Выбрать фото",
+            text="Выбрать фото",
             command=self._select_photo,
             bg="#27ae60",
             fg="white",
-            font=("Arial", 12, "bold"),
+            font=("TkDefaultFont", 11, "bold"),
             padx=20,
             pady=15,
-            cursor="hand2",
             width=25
         )
         self.photo_btn.pack(pady=10)
@@ -117,14 +136,13 @@ class PPEDetectionApp:
         # Кнопка выбора видео
         self.video_btn = tk.Button(
             actions_frame,
-            text="🎥 Выбрать видео",
+            text="Выбрать видео",
             command=self._select_video,
             bg="#e74c3c",
             fg="white",
-            font=("Arial", 12, "bold"),
+            font=("TkDefaultFont", 11, "bold"),
             padx=20,
             pady=15,
-            cursor="hand2",
             width=25
         )
         self.video_btn.pack(pady=10)
@@ -132,14 +150,13 @@ class PPEDetectionApp:
         # Кнопка трансляции
         self.stream_btn = tk.Button(
             actions_frame,
-            text="📹 Трансляция с камеры",
+            text="Трансляция с камеры",
             command=self._start_stream,
             bg="#9b59b6",
             fg="white",
-            font=("Arial", 12, "bold"),
+            font=("TkDefaultFont", 11, "bold"),
             padx=20,
             pady=15,
-            cursor="hand2",
             width=25
         )
         self.stream_btn.pack(pady=10)
@@ -154,10 +171,9 @@ class PPEDetectionApp:
             command=self._show_alarm,
             bg="#e67e22",
             fg="white",
-            font=("Arial", 9, "bold"),
+            font=("TkDefaultFont", 9, "bold"),
             padx=10,
-            pady=5,
-            cursor="hand2"
+            pady=5
         )
         self.alarm_btn.pack()
         
@@ -165,38 +181,45 @@ class PPEDetectionApp:
         self.status_label = tk.Label(
             main_frame,
             text="Готов к работе",
-            font=("Arial", 9),
+            font=("TkDefaultFont", 9),
             fg="green"
         )
         self.status_label.pack(pady=(10, 0))
     
     def _find_model(self):
         """Автоматически ищет модель в стандартных местах."""
-        possible_paths = [
-            Path("models/ppe_detection_obb/weights/best.pt"),
-            Path("models/ppe_detection_obb/weights/last.pt"),
-        ]
-        
-        # Также ищем в подпапках models
-        models_dir = Path("models")
-        if models_dir.exists():
-            for exp_dir in models_dir.iterdir():
-                if exp_dir.is_dir():
-                    best_path = exp_dir / "weights" / "best.pt"
-                    if best_path.exists():
-                        possible_paths.append(best_path)
-        
-        for model_path in possible_paths:
-            if model_path.exists():
-                self.model_path = model_path
-                self._load_model()
-                return
-        
-        # Если модель не найдена
-        self.model_label.config(
-            text="Модель не найдена. Пожалуйста, выберите модель вручную.",
-            fg="red"
-        )
+        try:
+            possible_paths = [
+                Path("models/ppe_detection_obb/weights/best.pt"),
+                Path("models/ppe_detection_obb/weights/last.pt"),
+            ]
+            
+            # Также ищем в подпапках models
+            models_dir = Path("models")
+            if models_dir.exists():
+                for exp_dir in models_dir.iterdir():
+                    if exp_dir.is_dir():
+                        best_path = exp_dir / "weights" / "best.pt"
+                        if best_path.exists():
+                            possible_paths.append(best_path)
+            
+            for model_path in possible_paths:
+                if model_path.exists():
+                    self.model_path = model_path
+                    self._load_model()
+                    return
+            
+            # Если модель не найдена
+            self.model_label.config(
+                text="Модель не найдена. Пожалуйста, выберите модель вручную.",
+                fg="red"
+            )
+        except Exception as e:
+            print(f"Ошибка при поиске модели: {e}")
+            self.model_label.config(
+                text=f"Ошибка при поиске модели: {e}",
+                fg="red"
+            )
     
     def _select_model(self):
         """Позволяет пользователю выбрать модель вручную."""
@@ -212,11 +235,15 @@ class PPEDetectionApp:
     def _load_model(self):
         """Загружает модель детектора."""
         if not self.model_path or not self.model_path.exists():
-            messagebox.showerror("Ошибка", "Файл модели не найден!")
+            try:
+                messagebox.showerror("Ошибка", "Файл модели не найден!")
+            except:
+                print("Ошибка: Файл модели не найден!")
             return
         
         try:
-            self.status_label.config(text="Загрузка модели...", fg="orange")
+            if hasattr(self, 'status_label'):
+                self.status_label.config(text="Загрузка модели...", fg="orange")
             self.root.update()
             
             self.detector = PPEDetector(
@@ -225,15 +252,25 @@ class PPEDetectionApp:
                 device="auto"
             )
             
-            self.model_label.config(
-                text=f"Модель: {self.model_path.name}\nПуть: {self.model_path}",
-                fg="green"
-            )
-            self.status_label.config(text="Модель загружена успешно", fg="green")
+            if hasattr(self, 'model_label'):
+                self.model_label.config(
+                    text=f"Модель: {self.model_path.name}\nПуть: {self.model_path}",
+                    fg="green"
+                )
+            if hasattr(self, 'status_label'):
+                self.status_label.config(text="Модель загружена успешно", fg="green")
             
         except Exception as e:
-            messagebox.showerror("Ошибка", f"Не удалось загрузить модель:\n{e}")
-            self.status_label.config(text="Ошибка загрузки модели", fg="red")
+            error_msg = f"Не удалось загрузить модель:\n{e}"
+            print(error_msg)
+            import traceback
+            traceback.print_exc()
+            try:
+                messagebox.showerror("Ошибка", error_msg)
+            except:
+                pass
+            if hasattr(self, 'status_label'):
+                self.status_label.config(text="Ошибка загрузки модели", fg="red")
             self.detector = None
     
     def _select_photo(self):
@@ -314,7 +351,7 @@ class PPEDetectionApp:
             info_label = tk.Label(
                 result_window,
                 text=f"Детекции:\n{info_text}",
-                font=("Arial", 9),
+                font=("TkDefaultFont", 9),
                 justify=tk.LEFT,
                 padx=10,
                 pady=10
@@ -328,7 +365,7 @@ class PPEDetectionApp:
             command=result_window.destroy,
             bg="#3498db",
             fg="white",
-            font=("Arial", 10),
+            font=("TkDefaultFont", 9),
             padx=20,
             pady=5
         )
@@ -436,7 +473,7 @@ class PPEDetectionApp:
         title_label = tk.Label(
             dialog,
             text="Выберите камеру",
-            font=("Arial", 14, "bold"),
+            font=("TkDefaultFont", 12, "bold"),
             pady=20
         )
         title_label.pack()
@@ -465,7 +502,7 @@ class PPEDetectionApp:
                 text=camera_info,
                 variable=selected_camera,
                 value=cam_id,
-                font=("Arial", 10),
+                font=("TkDefaultFont", 9),
                 anchor=tk.W
             )
             radio.pack(fill=tk.X, pady=5)
@@ -484,7 +521,7 @@ class PPEDetectionApp:
             command=start,
             bg="#27ae60",
             fg="white",
-            font=("Arial", 10, "bold"),
+            font=("TkDefaultFont", 9, "bold"),
             padx=20,
             pady=5
         )
@@ -496,7 +533,7 @@ class PPEDetectionApp:
             command=dialog.destroy,
             bg="#95a5a6",
             fg="white",
-            font=("Arial", 10),
+            font=("TkDefaultFont", 9),
             padx=20,
             pady=5
         )
@@ -686,7 +723,7 @@ class PPEDetectionApp:
             title_label = tk.Label(
                 dialog,
                 text="Выберите фотографию",
-                font=("Arial", 12, "bold"),
+                font=("TkDefaultFont", 11, "bold"),
                 pady=15
             )
             title_label.pack()
@@ -703,7 +740,7 @@ class PPEDetectionApp:
                     text=img_path.name,
                     variable=selected_path,
                     value=str(img_path),
-                    font=("Arial", 9),
+                    font=("TkDefaultFont", 9),
                     anchor=tk.W,
                     wraplength=350
                 )
@@ -724,7 +761,7 @@ class PPEDetectionApp:
                 command=confirm,
                 bg="#27ae60",
                 fg="white",
-                font=("Arial", 10, "bold"),
+                font=("TkDefaultFont", 9, "bold"),
                 padx=15,
                 pady=5
             )
@@ -736,7 +773,7 @@ class PPEDetectionApp:
                 command=dialog.destroy,
                 bg="#95a5a6",
                 fg="white",
-                font=("Arial", 10),
+                font=("TkDefaultFont", 9),
                 padx=15,
                 pady=5
             )
@@ -780,8 +817,8 @@ class PPEDetectionApp:
         
         warning_label = tk.Label(
             warning_frame,
-            text="⚠️ НАРУШЕНИЕ СОБЛЮДЕНИЯ СИЗ",
-            font=("Arial", 18, "bold"),
+            text="НАРУШЕНИЕ СОБЛЮДЕНИЯ СИЗ",
+            font=("TkDefaultFont", 16, "bold"),
             bg="#e74c3c",
             fg="white"
         )
@@ -807,7 +844,7 @@ class PPEDetectionApp:
         info_label = tk.Label(
             image_frame,
             text=f"Фото: {image_path.name}",
-            font=("Arial", 8),
+            font=("TkDefaultFont", 8),
             fg="gray"
         )
         info_label.pack(pady=(5, 0))
@@ -822,7 +859,7 @@ class PPEDetectionApp:
             command=alarm_window.destroy,
             bg="#95a5a6",
             fg="white",
-            font=("Arial", 10),
+            font=("TkDefaultFont", 9),
             padx=20,
             pady=5
         )
@@ -831,9 +868,20 @@ class PPEDetectionApp:
 
 def main():
     """Главная функция приложения."""
-    root = tk.Tk()
-    app = PPEDetectionApp(root)
-    root.mainloop()
+    try:
+        root = tk.Tk()
+        app = PPEDetectionApp(root)
+        root.mainloop()
+    except Exception as e:
+        import traceback
+        print(f"Критическая ошибка: {e}")
+        traceback.print_exc()
+        # Показываем ошибку в окне, если tkinter работает
+        try:
+            import tkinter.messagebox as mb
+            mb.showerror("Критическая ошибка", f"Программа завершилась с ошибкой:\n{e}\n\nПроверьте консоль для деталей.")
+        except:
+            pass
 
 
 if __name__ == "__main__":

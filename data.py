@@ -233,7 +233,7 @@ def main():
     if not args.force:
         needs_split = check_structure(args.images, args.labels)
         if not needs_split:
-            print("✅ Данные уже разделены на train/val")
+            print("   Данные уже разделены на train/val")
             print("   Используйте --force для принудительного разделения")
             return
     
@@ -246,13 +246,13 @@ def main():
         )
         
         print("=" * 70)
-        print(f"✅ Разделение завершено успешно!")
+        print(f"   Разделение завершено успешно!")
         print(f"   Перемещено изображений: {moved_images}")
         print(f"   Перемещено аннотаций: {moved_labels}")
         print("=" * 70)
         
     except Exception as e:
-        print(f"❌ Ошибка при разделении: {e}")
+        print(f"   Ошибка при разделении: {e}")
         import traceback
         traceback.print_exc()
         return 1

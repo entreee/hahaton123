@@ -250,6 +250,78 @@ def get_dataset_stats(data_root: str = "data") -> Dict[str, any]:
     return stats
 
 
+def check_obb_labels(labels_dir: Path) -> Tuple[int, int, int]:
+    """
+    Проверяет формат OBB аннотаций в файлах .txt.
+    Ожидаемый формат: class_id x1 y1 x2 y2 x3 y3 x4 y4 (9 значений)
+    
+    Args:
+        labels_dir: Директория с файлами разметки
+        
+    Returns:
+        Кортеж (валидных файлов, всего файлов, всего ошибок)
+    """
+    if not labels_dir.exists():
+        print(f"Ошибка: Директория разметки не найдена: {labels_dir}")
+        return 0, 0, 0
+
+    label_files = list(labels_dir.glob("*.txt"))
+    if not label_files:
+        print(f"В директории {labels_dir} не найдено файлов разметки (.txt).")
+        return 0, 0, 0
+
+    print(f"Проверка {len(label_files)} файлов разметки в {labels_dir}...")
+
+    valid_files = 0
+    total_errors = 0
+
+    for label_file in label_files:
+        file_valid = True
+        try:
+            with open(label_file, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+                for line_num, line in enumerate(lines, 1):
+                    line = line.strip()
+                    if not line or line.startswith('#'):
+                        continue
+
+                    parts = line.split()
+                    if len(parts) != 9:
+                        print(f"  ❌ {label_file.name}:{line_num} - Неверное количество значений ({len(parts)} вместо 9).")
+                        file_valid = False
+                        total_errors += 1
+                        continue
+
+                    try:
+                        class_id = int(parts[0])
+                        coords = [float(p) for p in parts[1:]]
+
+                        if not all(0.0 <= c <= 1.0 for c in coords):
+                            print(f"  ⚠️ {label_file.name}:{line_num} - Координаты вне диапазона [0, 1].")
+                            file_valid = False
+                            total_errors += 1
+
+                    except ValueError as ve:
+                        print(f"  ❌ {label_file.name}:{line_num} - Ошибка парсинга чисел: {ve}")
+                        file_valid = False
+                        total_errors += 1
+
+        except Exception as e:
+            print(f"  ❌ Ошибка чтения файла {label_file.name}: {e}")
+            file_valid = False
+            total_errors += 1
+        
+        if file_valid:
+            valid_files += 1
+
+    if valid_files == len(label_files):
+        print(f"\n✅ Все {len(label_files)} файлов разметки имеют корректный OBB формат.")
+    else:
+        print(f"\n⚠️ Найдено {len(label_files) - valid_files} файлов с ошибками в формате OBB.")
+    
+    return valid_files, len(label_files), total_errors
+
+
 if __name__ == "__main__":
     # Пример использования
     print("=== ПРОВЕРКА ДАННЫХ ===")

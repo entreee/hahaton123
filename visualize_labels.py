@@ -27,17 +27,20 @@ CLASS_NAMES = {
 }
 
 
-def parse_yolo_label(label_path: Path) -> List[Tuple[int, float, float, float, float]]:
+def parse_yolo_label(label_path: Path) -> List[Tuple]:
     """
-    Парсит YOLO формат файла разметки.
+    Парсит YOLO формат файла разметки (поддерживает обычный YOLO и OBB).
     
-    Формат YOLO: class_id center_x center_y width height (все в относительных координатах 0-1)
+    Формат YOLO: class_id center_x center_y width height (5 значений)
+    Формат OBB: class_id x1 y1 x2 y2 x3 y3 x4 y4 (9 значений)
     
     Args:
         label_path: Путь к файлу разметки
         
     Returns:
-        Список кортежей (class_id, center_x, center_y, width, height)
+        Список кортежей:
+        - Для обычного YOLO: (class_id, center_x, center_y, width, height, 'yolo')
+        - Для OBB: (class_id, x1, y1, x2, y2, x3, y3, x4, y4, 'obb')
     """
     annotations = []
     
@@ -45,23 +48,31 @@ def parse_yolo_label(label_path: Path) -> List[Tuple[int, float, float, float, f
         return annotations
     
     try:
-        with open(label_path, 'r') as f:
+        with open(label_path, 'r', encoding='utf-8') as f:
             for line in f:
                 line = line.strip()
-                if not line:
+                if not line or line.startswith('#'):
                     continue
                 
                 parts = line.split()
-                if len(parts) != 5:
-                    continue
                 
-                class_id = int(parts[0])
-                center_x = float(parts[1])
-                center_y = float(parts[2])
-                width = float(parts[3])
-                height = float(parts[4])
+                # OBB формат (9 значений)
+                if len(parts) == 9:
+                    class_id = int(parts[0])
+                    x1, y1 = float(parts[1]), float(parts[2])
+                    x2, y2 = float(parts[3]), float(parts[4])
+                    x3, y3 = float(parts[5]), float(parts[6])
+                    x4, y4 = float(parts[7]), float(parts[8])
+                    annotations.append((class_id, x1, y1, x2, y2, x3, y3, x4, y4, 'obb'))
                 
-                annotations.append((class_id, center_x, center_y, width, height))
+                # Обычный YOLO формат (5 значений)
+                elif len(parts) == 5:
+                    class_id = int(parts[0])
+                    center_x = float(parts[1])
+                    center_y = float(parts[2])
+                    width = float(parts[3])
+                    height = float(parts[4])
+                    annotations.append((class_id, center_x, center_y, width, height, 'yolo'))
     except Exception as e:
         print(f"Ошибка при чтении {label_path}: {e}")
     
@@ -110,17 +121,17 @@ def yolo_to_bbox(
 
 def draw_bboxes(
     image: np.ndarray,
-    annotations: List[Tuple[int, float, float, float, float]],
+    annotations: List[Tuple],
     show_class: bool = True,
     show_confidence: bool = False,
     line_thickness: int = 2
 ) -> np.ndarray:
     """
-    Рисует bounding boxes на изображении.
+    Рисует bounding boxes на изображении (поддерживает обычный YOLO и OBB).
     
     Args:
         image: Изображение (BGR формат)
-        annotations: Список аннотаций в формате YOLO
+        annotations: Список аннотаций (YOLO или OBB формат)
         show_class: Показывать название класса
         show_confidence: Показывать уверенность (не используется, т.к. в YOLO разметке нет confidence)
         line_thickness: Толщина линий
@@ -131,16 +142,45 @@ def draw_bboxes(
     img_height, img_width = image.shape[:2]
     result_image = image.copy()
     
-    for class_id, center_x, center_y, width, height in annotations:
-        # Конвертируем в абсолютные координаты
-        x1, y1, x2, y2 = yolo_to_bbox(center_x, center_y, width, height, img_width, img_height)
+    for ann in annotations:
+        format_type = ann[-1]  # 'yolo' или 'obb'
+        class_id = ann[0]
         
         # Получаем цвет и название класса
-        color = CLASS_COLORS.get(class_id, (255, 255, 255))  # Белый по умолчанию
+        color = CLASS_COLORS.get(class_id, (255, 255, 255))
         class_name = CLASS_NAMES.get(class_id, f"class_{class_id}")
         
-        # Рисуем прямоугольник
-        cv2.rectangle(result_image, (x1, y1), (x2, y2), color, line_thickness)
+        if format_type == 'obb':
+            # OBB формат: рисуем rotated box
+            x1, y1 = float(ann[1]), float(ann[2])
+            x2, y2 = float(ann[3]), float(ann[4])
+            x3, y3 = float(ann[5]), float(ann[6])
+            x4, y4 = float(ann[7]), float(ann[8])
+            
+            # Конвертируем в абсолютные координаты
+            points = np.array([
+                [int(x1 * img_width), int(y1 * img_height)],
+                [int(x2 * img_width), int(y2 * img_height)],
+                [int(x3 * img_width), int(y3 * img_height)],
+                [int(x4 * img_width), int(y4 * img_height)]
+            ], dtype=np.int32)
+            
+            # Рисуем rotated box
+            pts = points.reshape((-1, 1, 2))
+            cv2.polylines(result_image, [pts], True, color, line_thickness)
+            
+            # Позиция для текста (верхний левый угол)
+            x_coords = points[:, 0]
+            y_coords = points[:, 1]
+            x1_text = int(x_coords.min())
+            y1_text = int(y_coords.min())
+        
+        else:
+            # Обычный YOLO формат: рисуем прямоугольник
+            center_x, center_y, width, height = ann[1], ann[2], ann[3], ann[4]
+            x1, y1, x2, y2 = yolo_to_bbox(center_x, center_y, width, height, img_width, img_height)
+            cv2.rectangle(result_image, (x1, y1), (x2, y2), color, line_thickness)
+            x1_text, y1_text = x1, y1
         
         # Подпись
         if show_class:
@@ -157,8 +197,8 @@ def draw_bboxes(
             # Рисуем фон для текста
             cv2.rectangle(
                 result_image,
-                (x1, y1 - text_height - 10),
-                (x1 + text_width, y1),
+                (x1_text, y1_text - text_height - 10),
+                (x1_text + text_width, y1_text),
                 color,
                 -1
             )
@@ -167,7 +207,7 @@ def draw_bboxes(
             cv2.putText(
                 result_image,
                 label,
-                (x1, y1 - 5),
+                (x1_text, y1_text - 5),
                 font,
                 font_scale,
                 (255, 255, 255),  # Белый текст

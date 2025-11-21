@@ -194,54 +194,17 @@ def main() -> None:
             logger.info("PPEDetectorTrainer инициализирован")
             
             # Автоматический выбор параметров в зависимости от устройства
-            # Для маленьких объектов используем увеличенный размер изображения
-            logger.info(f"Текущее устройство: {config.device}")
-            logger.info("Оптимизация для маленьких объектов и высокого угла обзора:")
-            logger.info(f"  - Размер изображения: {config.img_size}x{config.img_size} (увеличен для лучшей детекции)")
-            logger.info(f"  - Модель: {config.model_name} (более крупная модель)")
-            logger.info(f"  - Порог уверенности: {config.conf_threshold} (понижен для маленьких объектов)")
-            
             if config.device == "cpu":
-                epochs = 60  # Количество эпох для CPU
-                batch_size = 4  # Оптимизировано для скорости
-                img_size = 640  # Стандартный размер для CPU (быстрее)
-                logger.info(f"Используется CPU: epochs={epochs}, batch_size={batch_size}, img_size={img_size}")
-                logger.info("  Примечание: CPU обучение медленнее GPU. Рекомендуется использовать GPU.")
+                epochs = 60
+                batch_size = 4
+                img_size = 640
             else:
                 epochs = config.epochs
                 batch_size = config.batch_size
                 img_size = config.img_size
-                logger.info(f"Используется GPU: epochs={epochs}, batch_size={batch_size}, img_size={img_size}")
-                if platform.system() == 'Linux':
-                    logger.info("  Параметры МАКСИМАЛЬНО оптимизированы для Linux:")
-                    logger.info("    - Ожидается ~40-60 it/s (вместо 6)")
-                    logger.info("    - Время обучения: ~2-3 часа (60 эпох)")
-                    logger.info("    - Эпохи: 60")
-                    logger.info("    - Workers: до 12 (Linux оптимизация)")
-                    logger.info("    - Multiprocessing: 'fork' метод (быстрее)")
-                    logger.info("    - Augmentation минимизирована для скорости")
-                    logger.info("    - Ускорение: ~5-10x")
-                else:
-                    logger.info("  Параметры МАКСИМАЛЬНО оптимизированы для скорости:")
-                    logger.info("    - Ожидается ~40-60 it/s (вместо 6)")
-                    logger.info("    - Время обучения: ~2-3 часа (60 эпох)")
-                    logger.info("    - Эпохи: 60")
-                    logger.info("    - Augmentation минимизирована для скорости")
-                    logger.info("    - Ускорение: ~5-10x")
             
+            logger.info(f"Параметры обучения: epochs={epochs}, img_size={img_size}, batch_size={batch_size}, patience={config.patience}, workers={config.workers}")
             logger.info("Запуск обучения...")
-            logger.info(f"Параметры: epochs={epochs}, img_size={img_size}, batch_size={batch_size}, patience={config.patience}, workers={config.workers}")
-            logger.info("Augmentation (МИНИМАЛЬНА для максимальной скорости):")
-            logger.info("  - Mosaic: ОТКЛЮЧЕН (было 0.5) - экономит ~30% времени")
-            logger.info("  - Mixup: ОТКЛЮЧЕН (было 0.1) - экономит ~10% времени")
-            logger.info("  - Copy-paste: ОТКЛЮЧЕН (было 0.1) - экономит ~15% времени")
-            logger.info("  - Horizontal flip: 0.5 (быстро и эффективно)")
-            logger.info("  - Scale: 0.2 (минимум, было 0.5)")
-            logger.info("  - Translate: 0.1 (минимум, было 0.2)")
-            logger.info("  - HSV augmentation: минимизировано")
-            logger.info("  - Mixed Precision (AMP): включен")
-            logger.info("  - Warmup epochs: 1 (было 3)")
-            logger.info("  - Эпохи: 30 (было 50)")
             
             train_results = trainer.train(
                 epochs=epochs,
@@ -277,6 +240,7 @@ def main() -> None:
             elif not best_model_path.exists():
                 logger.warning("Файл лучшей модели не найден, пропускаю тест инференса.")
             else:
+                val_images_dir = config.data_dir / "images" / "val"
                 val_images = list(val_images_dir.glob("*.jpg")) + list(val_images_dir.glob("*.png")) + list(
                     val_images_dir.glob("*.jpeg")
                 )
@@ -313,68 +277,18 @@ def main() -> None:
         
         # Финальное сообщение
         logger.info("=" * 70)
-        logger.info("🎉 ПАЙПЛАЙН ЗАВЕРШЕН УСПЕШНО!")
+        logger.info("ПАЙПЛАЙН ЗАВЕРШЕН УСПЕШНО")
         logger.info("=" * 70)
-        logger.info("")
-        logger.info("📋 ЧТО БЫЛО СДЕЛАНО:")
-        logger.info("  ✓ Структура проекта и конфигурация подготовлены")
-        logger.info("  ✓ Структура данных и разметка проверены")
-        logger.info("  ✓ Модель обучена")
-        logger.info("  ✓ Быстрый тест модели на одном изображении выполнен")
-        logger.info("")
         
-        # Показываем результаты
         if 'best_model_path' in locals() and best_model_path.exists():
-            logger.info("=" * 70)
-            logger.info("📦 СОЗДАННЫЕ РЕЗУЛЬТАТЫ:")
-            logger.info("=" * 70)
-            logger.info("")
-            logger.info("⭐ ГЛАВНЫЙ РЕЗУЛЬТАТ - ОБУЧЕННАЯ МОДЕЛЬ:")
-            logger.info(f"   📍 Лучшая модель: {best_model_path}")
-            logger.info(f"   📍 Последняя модель: {best_model_path.parent / 'last.pt'}")
-            logger.info("")
-            logger.info("📊 МЕТРИКИ И ГРАФИКИ:")
+            logger.info(f"Обученная модель: {best_model_path}")
             experiment_dir = best_model_path.parent.parent
-            logger.info(f"   📍 Метрики (CSV): {experiment_dir / 'results.csv'}")
-            logger.info(f"   📍 Графики: {experiment_dir / 'results.png'}")
-            logger.info(f"   📍 Матрица ошибок: {experiment_dir / 'confusion_matrix.png'}")
+            logger.info(f"Метрики: {experiment_dir / 'results.csv'}")
+            logger.info(f"Графики: {experiment_dir / 'results.png'}")
             logger.info("")
-            logger.info("🧪 ТЕСТОВАЯ ДЕТЕКЦИЯ:")
-            logger.info(f"   📍 Результаты: output/detections/")
-            logger.info("")
-            logger.info("📝 ЛОГИ:")
-            logger.info(f"   📍 Лог pipeline: logs/pipeline_*.log")
-            logger.info(f"   📍 Лог обучения: {experiment_dir / 'logs'}")
-            logger.info("")
-        
-        logger.info("=" * 70)
-        logger.info("🚀 ЧТО ДЕЛАТЬ ДАЛЬШЕ:")
-        logger.info("=" * 70)
-        logger.info("")
-        logger.info("1️⃣  ИСПОЛЬЗОВАТЬ МОДЕЛЬ ДЛЯ ДЕТЕКЦИИ:")
-        logger.info("   • Откройте ноутбук: notebooks/inference.ipynb")
-        logger.info("   • Или используйте Python:")
-        logger.info("     from src.inference.detect_utils import PPEDetector")
-        logger.info("     detector = PPEDetector('models/ppe_detection/weights/best.pt')")
-        logger.info("     detector.detect_image('image.jpg', save_result=True)")
-        logger.info("")
-        logger.info("2️⃣  ПРОВЕРИТЬ КАЧЕСТВО МОДЕЛИ:")
-        logger.info("   • Откройте: models/ppe_detection/results.png (графики метрик)")
-        logger.info("   • Проверьте: models/ppe_detection/results.csv (детальные метрики)")
-        logger.info("   • Хорошие значения: mAP50 > 0.5 (50%)")
-        logger.info("")
-        logger.info("3️⃣  ВИЗУАЛИЗИРОВАТЬ РАЗМЕТКУ:")
-        logger.info("   • python visualize_labels.py")
-        logger.info("   • python visualize_labels.py --split val")
-        logger.info("")
-        logger.info("4️⃣  УЛУЧШИТЬ МОДЕЛЬ (если метрики низкие):")
-        logger.info("   • Добавьте больше данных")
-        logger.info("   • Проверьте качество разметки")
-        logger.info("   • Увеличьте количество эпох в config.py")
-        logger.info("")
-        logger.info("=" * 70)
-        logger.info("📖 Подробная информация: см. PIPELINE_RESULTS.md")
-        logger.info("=" * 70)
+            logger.info("Использование модели:")
+            logger.info("  python detect.py --model <путь_к_модели> --source <изображение/видео>")
+            logger.info("  python visualize_labels.py --split val")
         
     except Exception as e:
         logger.critical(f"Критическая ошибка в пайплайне: {e}", exc_info=True)

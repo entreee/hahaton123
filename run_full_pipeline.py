@@ -288,7 +288,7 @@ def main() -> None:
             logger.info("")
             logger.info("Использование модели:")
             logger.info("  python detect.py --model <путь_к_модели> --source <изображение/видео>")
-            logger.info("  python visualize_labels.py --split val")
+            logger.info("  python check.py --obb  # Проверка формата аннотаций")
         
     except Exception as e:
         logger.critical(f"Критическая ошибка в пайплайне: {e}", exc_info=True)

@@ -71,7 +71,7 @@ data/
 └── notes.json
 ```
 
-**Подробное руководство по разметке**: см. файл `OBB_ANNOTATION_GUIDE.md`
+**Формат аннотаций OBB**: Каждая строка в файле `.txt` содержит 9 значений: `class_id x1 y1 x2 y2 x3 y3 x4 y4`, где координаты нормализованы (0.0 - 1.0).
 
 ### 5. Разделение на train/val
 
@@ -155,23 +155,6 @@ python detect.py --model models/ppe_detection_obb/weights/best.pt --source image
 - `--output` или `-o`: Папка для сохранения результатов (по умолчанию: output/detections)
 - `--device`: Устройство ('cpu', '0' для GPU, 'auto' по умолчанию)
 
-### 9. Визуализация разметки
-
-Для просмотра разметки на изображениях:
-
-```bash
-# Визуализация train данных
-python visualize_labels.py
-
-# Визуализация val данных
-python visualize_labels.py --split val
-
-# Сохранение в папку
-python visualize_labels.py --output output/visualized_labels
-
-# Ограничение количества изображений
-python visualize_labels.py --limit 10
-```
 
 ## Структура проекта
 
@@ -189,10 +172,7 @@ hahaton123/
 ├── models/
 │   └── ppe_detection_obb/     # Обученные модели
 ├── output/                     # Результаты детекции
-├── notebooks/                  # Jupyter ноутбуки
-│   ├── data_preparation.ipynb
-│   ├── training.ipynb
-│   └── inference.ipynb
+├── logs/                       # Логи выполнения
 ├── src/                        # Исходный код
 │   ├── data/                   # Модули для работы с данными
 │   ├── models/                 # Модули для обучения
@@ -202,11 +182,10 @@ hahaton123/
 ├── data.py                     # Разделение датасета на train/val
 ├── check.py                    # Проверка структуры данных и формата OBB
 ├── detect.py                   # Детекция с обученной моделью
-├── visualize_labels.py         # Визуализация разметки
 ├── run_full_pipeline.py        # Полный автоматический пайплайн
 ├── requirements.txt            # Зависимости
 ├── README.md                   # Документация
-└── OBB_ANNOTATION_GUIDE.md    # Руководство по разметке OBB
+└── classes.txt.example         # Пример файла классов
 ```
 
 ## Параметры обучения

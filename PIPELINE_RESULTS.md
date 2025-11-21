@@ -26,7 +26,7 @@ hahaton123/
 │           └── ...
 │
 ├── 📁 models/
-│   └── 📁 ppe_detection/                # ✅ Директория эксперимента
+│   └── 📁 ppe_detection_obb/            # ✅ Директория эксперимента
 │       ├── 📁 weights/
 │       │   ├── best.pt                   # ⭐ ЛУЧШАЯ МОДЕЛЬ (используйте эту!)
 │       │   └── last.pt                   # Последняя модель
@@ -56,18 +56,18 @@ hahaton123/
 
 ### 1. **Обученная модель** (самое важное!)
 
-**Путь:** `models/ppe_detection/weights/best.pt`
+**Путь:** `models/ppe_detection_obb/weights/best.pt`
 
 - Это лучшая модель по метрике mAP50
 - Используйте её для детекции на новых изображениях
 
-**Альтернатива:** `models/ppe_detection/weights/last.pt`
+**Альтернатива:** `models/ppe_detection_obb/weights/last.pt`
 - Последняя модель после всех эпох
 - Может быть хуже чем best.pt
 
 ### 2. **Метрики обучения**
 
-**Файл:** `models/ppe_detection/results.csv`
+**Файл:** `models/ppe_detection_obb/results.csv`
 
 Содержит метрики по каждой эпохе:
 - `metrics/mAP50(B)` - средняя точность при IoU=0.5
@@ -78,7 +78,7 @@ hahaton123/
 - `train/cls_loss` - loss для классификации
 - И другие метрики
 
-**Графики:** `models/ppe_detection/results.png`
+**Графики:** `models/ppe_detection_obb/results.png`
 - Визуализация всех метрик в виде графиков
 - Показывает прогресс обучения
 
@@ -97,13 +97,13 @@ hahaton123/
 ```python
 import pandas as pd
 
-df = pd.read_csv("models/ppe_detection/results.csv")
+df = pd.read_csv("models/ppe_detection_obb/results.csv")
 print(df[['metrics/mAP50(B)', 'metrics/mAP50-95(B)']].tail())
 ```
 
 ### 2. Посмотреть графики
 
-Откройте `models/ppe_detection/results.png` - там будут графики:
+Откройте `models/ppe_detection_obb/results.png` - там будут графики:
 - Метрики должны расти (или стабилизироваться)
 - Loss должен уменьшаться
 
@@ -113,7 +113,7 @@ print(df[['metrics/mAP50(B)', 'metrics/mAP50-95(B)']].tail())
 from src.inference.detect_utils import PPEDetector
 
 # Загружаем лучшую модель
-detector = PPEDetector("models/ppe_detection/weights/best.pt")
+detector = PPEDetector("models/ppe_detection_obb/weights/best.pt")
 
 # Тестируем на изображении
 result_img, detections = detector.detect_image(
@@ -130,16 +130,16 @@ for det in detections:
 
 ### 1. Использовать модель для детекции
 
-**Через ноутбук (рекомендуется):**
+**Через скрипт:**
 ```bash
-jupyter lab notebooks/inference.ipynb
+python detect.py --model models/ppe_detection_obb/weights/best.pt --source image.jpg
 ```
 
 **Через Python:**
 ```python
 from src.inference.detect_utils import PPEDetector
 
-detector = PPEDetector("models/ppe_detection/weights/best.pt")
+detector = PPEDetector("models/ppe_detection_obb/weights/best.pt")
 
 # На изображении
 result_img, detections = detector.detect_image("image.jpg", save_result=True)
@@ -159,17 +159,14 @@ detector.detect_camera(camera_id=0)
 - Увеличьте количество эпох
 - Попробуйте другую модель (yolov8m.pt, yolov8x.pt)
 
-### 3. Визуализировать разметку
+### 3. Проверить разметку данных
 
 ```bash
-# Проверить разметку на изображениях
-python visualize_labels.py
+# Проверка структуры данных
+python check.py
 
-# Только валидационные изображения
-python visualize_labels.py --split val
-
-# Ограничить количество
-python visualize_labels.py --limit 20
+# Проверка формата OBB аннотаций
+python check.py --obb
 ```
 
 ## 📈 Типичные результаты
@@ -192,17 +189,17 @@ python visualize_labels.py --limit 20
 
 1. **Модель существует?**
    ```bash
-   ls models/ppe_detection/weights/best.pt
+   ls models/ppe_detection_obb/weights/best.pt
    ```
 
 2. **Метрики есть?**
    ```bash
-   ls models/ppe_detection/results.csv
+   ls models/ppe_detection_obb/results.csv
    ```
 
 3. **Графики созданы?**
    ```bash
-   ls models/ppe_detection/results.png
+   ls models/ppe_detection_obb/results.png
    ```
 
 4. **Тестовая детекция работает?**
@@ -213,20 +210,20 @@ python visualize_labels.py --limit 20
 ## ⚠️ Важные файлы
 
 **Обязательно сохраните:**
-- ✅ `models/ppe_detection/weights/best.pt` - лучшая модель
-- ✅ `models/ppe_detection/results.csv` - метрики
+- ✅ `models/ppe_detection_obb/weights/best.pt` - лучшая модель
+- ✅ `models/ppe_detection_obb/results.csv` - метрики
 - ✅ `config/ppe_data.yaml` - конфигурация датасета
 
 **Можно удалить (для экономии места):**
-- `models/ppe_detection/weights/last.pt` - если best.pt достаточно
-- `models/ppe_detection/train_batch*.jpg` - примеры батчей
+- `models/ppe_detection_obb/weights/last.pt` - если best.pt достаточно
+- `models/ppe_detection_obb/train_batch*.jpg` - примеры батчей
 - `logs/` - старые логи (если не нужны)
 
 ## 📝 Логи
 
 Все действия логируются в:
 - `logs/pipeline_YYYYMMDD_HHMMSS.log` - полный лог pipeline
-- `models/logs/ppe_detection_YYYYMMDD_HHMMSS.log` - лог обучения
+- `models/ppe_detection_obb/logs/` - логи обучения
 
 В логах можно найти:
 - Все выполненные этапы
